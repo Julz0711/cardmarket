@@ -1,0 +1,285 @@
+/* CardMarket Custom Theme */
+:root {
+  /* Background Colors */
+  --bg-primary: #2c2f33;
+  --bg-secondary: #36393f;
+  --bg-tertiary: #40444b;
+
+  /* Text Colors */
+  --text-primary: #f8f8f8;
+  --text-secondary: #dcddde;
+  --text-muted: #8e9297;
+
+  /* Accent Colors */
+  --color-red: #ff3d3d;
+  --color-gold: #ffd700;
+  --color-blue: #3b82f6;
+  --color-green: #34d399;
+
+  /* Semantic Colors */
+  --color-danger: var(--color-red);
+  --color-warning: var(--color-gold);
+  --color-primary: var(--color-blue);
+  --color-success: var(--color-green);
+
+  /* Border Colors */
+  --border-primary: #4f545c;
+  --border-secondary: #36393f;
+
+  /* Hover States */
+  --hover-bg: #40444b;
+  --hover-border: #72767d;
+}
+
+/* Base Styles */
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+/* Custom Button Styles */
+.btn-primary {
+  background-color: var(--color-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--color-primary);
+  transition: all 0.2s ease;
+}
+
+.btn-primary:hover {
+  background-color: #2563eb;
+  border-color: #2563eb;
+}
+
+.btn-danger {
+  background-color: var(--color-danger);
+  color: var(--text-primary);
+  border: 1px solid var(--color-danger);
+  transition: all 0.2s ease;
+}
+
+.btn-danger:hover {
+  background-color: #dc2626;
+  border-color: #dc2626;
+}
+
+.btn-success {
+  background-color: var(--color-success);
+  color: var(--text-primary);
+  border: 1px solid var(--color-success);
+  transition: all 0.2s ease;
+}
+
+.btn-success:hover {
+  background-color: #10b981;
+  border-color: #10b981;
+}
+
+.btn-secondary {
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-primary);
+  transition: all 0.2s ease;
+}
+
+.btn-secondary:hover {
+  background-color: var(--hover-bg);
+  border-color: var(--hover-border);
+}
+
+/* Card Styles */
+.card {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+}
+
+.card-header {
+  background-color: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-primary);
+  padding: 1rem;
+  border-radius: 8px 8px 0 0;
+}
+
+.card-body {
+  padding: 1.5rem;
+}
+
+/* Stats Card Styles */
+.stats-card {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  padding: 1.5rem;
+  transition: all 0.2s ease;
+}
+
+.stats-card:hover {
+  border-color: var(--hover-border);
+  background-color: var(--hover-bg);
+}
+
+.stats-icon-blue {
+  background-color: var(--color-blue);
+}
+
+.stats-icon-green {
+  background-color: var(--color-green);
+}
+
+.stats-icon-gold {
+  background-color: var(--color-gold);
+}
+
+.stats-icon-red {
+  background-color: var(--color-red);
+}
+
+/* Table Styles */
+.table {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.table-header {
+  background-color: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.table-row {
+  border-bottom: 1px solid var(--border-secondary);
+  transition: background-color 0.2s ease;
+}
+
+.table-row:hover {
+  background-color: var(--hover-bg);
+}
+
+.table-row:last-child {
+  border-bottom: none;
+}
+
+/* Input Styles */
+.input {
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  color: var(--text-primary);
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  transition: all 0.2s ease;
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.input::placeholder {
+  color: var(--text-muted);
+}
+
+/* Select Styles */
+.select {
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  color: var(--text-primary);
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  transition: all 0.2s ease;
+}
+
+.select:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/* Tab Styles */
+.tab-active {
+  border-bottom: 2px solid var(--color-primary);
+  color: var(--color-primary);
+}
+
+.tab-inactive {
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+  transition: all 0.2s ease;
+}
+
+.tab-inactive:hover {
+  color: var(--text-secondary);
+  border-bottom-color: var(--border-primary);
+}
+
+/* Loading Styles */
+.loading-spinner {
+  border-color: var(--border-primary);
+  border-top-color: var(--color-primary);
+}
+
+/* Alert Styles */
+.alert-error {
+  background-color: rgba(255, 61, 61, 0.1);
+  border: 1px solid var(--color-red);
+  color: var(--color-red);
+  border-radius: 6px;
+  padding: 1rem;
+}
+
+.alert-success {
+  background-color: rgba(52, 211, 153, 0.1);
+  border: 1px solid var(--color-green);
+  color: var(--color-green);
+  border-radius: 6px;
+  padding: 1rem;
+}
+
+.alert-warning {
+  background-color: rgba(255, 215, 0, 0.1);
+  border: 1px solid var(--color-gold);
+  color: var(--color-gold);
+  border-radius: 6px;
+  padding: 1rem;
+}
+
+/* Utility Classes */
+.text-primary {
+  color: var(--text-primary);
+}
+.text-secondary {
+  color: var(--text-secondary);
+}
+.text-muted {
+  color: var(--text-muted);
+}
+.text-red {
+  color: var(--color-red);
+}
+.text-gold {
+  color: var(--color-gold);
+}
+.text-blue {
+  color: var(--color-blue);
+}
+.text-green {
+  color: var(--color-green);
+}
+
+.bg-primary {
+  background-color: var(--bg-primary);
+}
+.bg-secondary {
+  background-color: var(--bg-secondary);
+}
+.bg-tertiary {
+  background-color: var(--bg-tertiary);
+}
+
+.border-primary {
+  border-color: var(--border-primary);
+}
+.border-secondary {
+  border-color: var(--border-secondary);
+}
