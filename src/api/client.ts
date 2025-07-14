@@ -1,34 +1,38 @@
+import type {
+  Asset,
+  AssetType,
+  Card,
+  Stock,
+  ETF,
+  Crypto,
+  SteamItem,
+  AssetStats,
+  PortfolioSummary,
+  CardStats,
+} from "../types/assets";
+
 const API_BASE_URL = "http://localhost:5000/api";
 
-export interface Card {
-  id: number;
-  tcg: string;
-  expansion: string;
-  number: number;
-  name: string;
-  rarity: string;
-  supply: number;
-  current_price: number;
-  price_bought: number | string;
-  psa: string;
-  last_updated: string;
-}
-
-export interface Stats {
-  total_cards: number;
-  total_value: number;
-  average_price: number;
-  expansions: string[];
-  rarities: string[];
-}
-
 export interface ApiResponse<T> {
-  cards?: T[];
+  data?: T;
+  items?: T[];
   total?: number;
   timestamp?: string;
   message?: string;
   error?: string;
 }
+
+// Re-export types for backward compatibility
+export type {
+  Asset,
+  AssetType,
+  Card,
+  Stock,
+  ETF,
+  Crypto,
+  SteamItem,
+  CardStats,
+};
 
 class ApiClient {
   private async request<T>(
@@ -107,6 +111,16 @@ class ApiClient {
     });
   }
 
+  async updateCardBuyPrice(
+    id: number,
+    buyPrice: number
+  ): Promise<ApiResponse<Card>> {
+    return this.request<ApiResponse<Card>>(`/cards/${id}/buy-price`, {
+      method: "PUT",
+      body: JSON.stringify({ buy_price: buyPrice }),
+    });
+  }
+
   async deleteCard(id: number): Promise<ApiResponse<Card>> {
     return this.request<ApiResponse<Card>>(`/cards/${id}`, {
       method: "DELETE",
@@ -124,8 +138,44 @@ class ApiClient {
   }
 
   // Stats endpoint
-  async getStats(): Promise<Stats> {
-    return this.request<Stats>("/stats");
+  async getStats(): Promise<CardStats> {
+    return this.request<CardStats>("/stats");
+  }
+
+  // Portfolio endpoints
+  async getPortfolioSummary(): Promise<PortfolioSummary> {
+    return this.request<PortfolioSummary>("/portfolio/summary");
+  }
+
+  async getAssetsByType(type: AssetType): Promise<ApiResponse<Asset[]>> {
+    return this.request<ApiResponse<Asset[]>>(`/assets/${type}`);
+  }
+
+  async getAssetStats(type: AssetType): Promise<AssetStats> {
+    return this.request<AssetStats>(`/assets/${type}/stats`);
+  }
+
+  async deleteAllAssets(type: AssetType): Promise<ApiResponse<any>> {
+    return this.request<ApiResponse<any>>(`/assets/${type}`, {
+      method: "DELETE",
+    });
+  }
+
+  // Asset-specific endpoints
+  async getStocks(): Promise<ApiResponse<Stock[]>> {
+    return this.getAssetsByType("stocks") as Promise<ApiResponse<Stock[]>>;
+  }
+
+  async getETFs(): Promise<ApiResponse<ETF[]>> {
+    return this.getAssetsByType("etfs") as Promise<ApiResponse<ETF[]>>;
+  }
+
+  async getCrypto(): Promise<ApiResponse<Crypto[]>> {
+    return this.getAssetsByType("crypto") as Promise<ApiResponse<Crypto[]>>;
+  }
+
+  async getSteamItems(): Promise<ApiResponse<SteamItem[]>> {
+    return this.getAssetsByType("steam") as Promise<ApiResponse<SteamItem[]>>;
   }
 
   // Import from pandas
@@ -145,7 +195,7 @@ class ApiClient {
     return this.request("/health");
   }
 
-  // Scraping endpoints
+  // Scraping endpoints - Cards
   async scrapeCards(data: {
     tcg: string;
     expansion: string;
@@ -156,7 +206,63 @@ class ApiClient {
     scraped_cards: Card[];
     total_cards: number;
   }> {
-    return this.request("/scrape", {
+    return this.request("/scrape/cards", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async scrapeNewCard(url: string): Promise<{
+    success: boolean;
+    message: string;
+    added: boolean;
+    card?: Card;
+  }> {
+    return this.request("/cards/scrape-single", {
+      method: "POST",
+      body: JSON.stringify({ url }),
+    });
+  }
+
+  // Scraping endpoints - Stocks (placeholder)
+  async scrapeStocks(data: { symbols: string[]; market?: string }): Promise<{
+    message: string;
+    scraped_stocks: Stock[];
+  }> {
+    return this.request("/scrape/stocks", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  // Scraping endpoints - ETFs (placeholder)
+  async scrapeETFs(data: { symbols: string[] }): Promise<{
+    message: string;
+    scraped_etfs: ETF[];
+  }> {
+    return this.request("/scrape/etfs", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  // Scraping endpoints - Crypto (placeholder)
+  async scrapeCrypto(data: { symbols: string[] }): Promise<{
+    message: string;
+    scraped_crypto: Crypto[];
+  }> {
+    return this.request("/scrape/crypto", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  // Scraping endpoints - Steam (placeholder)
+  async scrapeSteam(data: { steamId: string; appId?: string }): Promise<{
+    message: string;
+    scraped_items: SteamItem[];
+  }> {
+    return this.request("/scrape/steam", {
       method: "POST",
       body: JSON.stringify(data),
     });
@@ -190,6 +296,19 @@ class ApiClient {
     message: string;
   }> {
     return this.request("/scrape/status");
+  }
+
+  async rescrapeCardPrices(): Promise<{
+    status: string;
+    message: string;
+    updated_cards: Card[];
+    errors: string[];
+    total_updated: number;
+    total_errors: number;
+  }> {
+    return this.request("/cards/rescrape", {
+      method: "POST",
+    });
   }
 }
 
