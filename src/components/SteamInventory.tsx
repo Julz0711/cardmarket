@@ -7,6 +7,9 @@ import SportsEsportsIcon from "@mui/icons-material/SportsEsports";
 import DeleteIcon from "@mui/icons-material/Delete";
 import WarningIcon from "@mui/icons-material/Warning";
 import SearchIcon from "@mui/icons-material/Search";
+import EditIcon from "@mui/icons-material/Edit";
+import SaveIcon from "@mui/icons-material/Save";
+import CancelIcon from "@mui/icons-material/Cancel";
 
 export const SteamInventory: React.FC = () => {
   const [items, setItems] = useState<SteamItem[]>([]);
@@ -14,13 +17,22 @@ export const SteamInventory: React.FC = () => {
   const [error, setError] = useState("");
   const [deleteAllConfirm, setDeleteAllConfirm] = useState(false);
   const [deletingAll, setDeletingAll] = useState(false);
+  const [updatingPrices, setUpdatingPrices] = useState(false);
+
+  // Edit price states
+  const [editingItem, setEditingItem] = useState<string | null>(null);
+  const [editPrice, setEditPrice] = useState("");
 
   // Filter states
   const [nameFilter, setNameFilter] = useState("");
   const [rarityFilter, setRarityFilter] = useState("");
+  const [minPrice, setMinPrice] = useState("");
+  const [maxPrice, setMaxPrice] = useState("");
 
   // Sort states
-  const [sortBy, setSortBy] = useState<"name" | "rarity">("name");
+  const [sortBy, setSortBy] = useState<"name" | "rarity" | "price" | "profit">(
+    "name"
+  );
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
   useEffect(() => {
@@ -38,6 +50,38 @@ export const SteamInventory: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleEditPrice = (item: SteamItem) => {
+    setEditingItem(item._id || item.id?.toString() || "");
+    setEditPrice(item.price_bought?.toString() || "0");
+  };
+
+  const handleSavePrice = async (itemId: string) => {
+    try {
+      const price = parseFloat(editPrice) || 0;
+      await apiClient.updateSteamItem(itemId, { price_bought: price });
+
+      // Update local state
+      setItems(
+        items.map((item) =>
+          (item._id || item.id?.toString()) === itemId
+            ? { ...item, price_bought: price }
+            : item
+        )
+      );
+
+      setEditingItem(null);
+      setEditPrice("");
+    } catch (err) {
+      setError("Failed to update bought price");
+      console.error(err);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingItem(null);
+    setEditPrice("");
   };
 
   const handleDeleteAllItems = async () => {
@@ -63,6 +107,40 @@ export const SteamInventory: React.FC = () => {
     }
   };
 
+  const handleUpdatePrices = async () => {
+    try {
+      setUpdatingPrices(true);
+      setError("");
+
+      const response = await apiClient.updateSteamPrices({
+        headless: true,
+      });
+
+      // Update local state with new prices
+      if (response.details.updated.length > 0) {
+        setItems((prevItems) =>
+          prevItems.map((item) => {
+            const updatedItem = response.details.updated.find(
+              (updated) => updated.name === item.name
+            );
+            if (updatedItem) {
+              return { ...item, current_price: updatedItem.price };
+            }
+            return item;
+          })
+        );
+      }
+
+      // Show success message
+      console.log(`Price update completed: ${response.message}`);
+    } catch (err) {
+      setError("Failed to update prices from CSFloat");
+      console.error(err);
+    } finally {
+      setUpdatingPrices(false);
+    }
+  };
+
   // Filter items based on current filter criteria
   const filteredItems = items
     .filter((item) => {
@@ -76,6 +154,15 @@ export const SteamInventory: React.FC = () => {
 
       // Rarity filter
       if (rarityFilter && item.rarity !== rarityFilter) {
+        return false;
+      }
+
+      // Price filter
+      const currentPrice = item.current_price || 0;
+      if (minPrice && currentPrice < parseFloat(minPrice)) {
+        return false;
+      }
+      if (maxPrice && currentPrice > parseFloat(maxPrice)) {
         return false;
       }
 
@@ -105,9 +192,6 @@ export const SteamInventory: React.FC = () => {
             Master: 6,
             Common: 1,
             Uncommon: 2,
-            Rare: 3,
-            Mythical: 4,
-            Legendary: 5,
             Immortal: 7,
           };
           const aRarity =
@@ -115,6 +199,14 @@ export const SteamInventory: React.FC = () => {
           const bRarity =
             rarityOrder[b.rarity as keyof typeof rarityOrder] || 0;
           compareValue = aRarity - bRarity;
+          break;
+        case "price":
+          compareValue = (a.current_price || 0) - (b.current_price || 0);
+          break;
+        case "profit":
+          const aProfit = (a.current_price || 0) - (a.price_bought || 0);
+          const bProfit = (b.current_price || 0) - (b.price_bought || 0);
+          compareValue = aProfit - bProfit;
           break;
       }
 
@@ -127,6 +219,8 @@ export const SteamInventory: React.FC = () => {
   const clearFilters = () => {
     setNameFilter("");
     setRarityFilter("");
+    setMinPrice("");
+    setMaxPrice("");
     setSortBy("name");
     setSortOrder("asc");
   };
@@ -143,15 +237,44 @@ export const SteamInventory: React.FC = () => {
       Extraordinary: "#eb4b4b",
       Uncommon: "#5e98d9",
       Common: "#b0b0b0",
-      Distinguished: "#4b69ff",
-      Exceptional: "#8847ff",
-      Superior: "#d32ce6",
-      Master: "#eb4b4b",
-      Rare: "#8847ff",
-      Mythical: "#d32ce6",
-      Legendary: "#eb4b4b",
+      Stock: "#b0b0b0",
+      // Agent rarities - NEW proper names (after rescraping)
+      "Master Agent": "#eb4b4b", // Master Agent (red)
+      "Superior Agent": "#d32ce6", // Superior Agent (pink)
+      "Exceptional Agent": "#8847ff", // Exceptional Agent (purple)
+      "Distinguished Agent": "#4b69ff", // Distinguished Agent (blue)
+      // Agent rarities - OLD format (before rescraping) - TEMPORARY FIXES
+      Master: "#eb4b4b", // Will show as Master Agent after rescraping
+      Superior: "#d32ce6", // Will show as Superior Agent after rescraping
+      Exceptional: "#8847ff", // Will show as Exceptional Agent after rescraping
+      Distinguished: "#4b69ff", // Will show as Distinguished Agent after rescraping
+      // Legacy agent rarities mapped incorrectly - FIXES for current data
+      Legendary: "#eb4b4b", // Actually Master Agent (red) - WRONG in current data
+      Mythical: "#8847ff", // Actually Exceptional Agent (purple) - WRONG in current data
+      Rare: "#4b69ff", // Actually Distinguished Agent (blue) - WRONG in current data
       Immortal: "#e4ae39",
+      // CS2 Agent rarity variations
+      "★": "#ffd700", // Special symbol for some agents
+      "★ Master Agent": "#eb4b4b",
+      "★ Superior Agent": "#d32ce6",
+      "★ Exceptional Agent": "#8847ff",
+      "★ Distinguished Agent": "#4b69ff",
+      // Quality levels
+      Normal: "#b0b0b0",
+      Genuine: "#4b69ff",
+      Vintage: "#476291",
+      Unusual: "#8650ac",
+      Unique: "#ffd700",
+      Strange: "#cf6a32",
+      Haunted: "#38f3ab",
+      "Collector's": "#aa0000",
+      Decorated: "#ffd700",
     };
+
+    // Debug log to see what rarity values we're getting
+    if (!colors[rarity]) {
+      console.log(`Unknown rarity: "${rarity}"`);
+    }
 
     return colors[rarity] || "#b0b0b0";
   };
@@ -202,14 +325,14 @@ export const SteamInventory: React.FC = () => {
               <SportsEsportsIcon fontSize="small" className="text-primary" />
             </div>
             <h2 className="text-xl font-semibold text-primary">
-              Steam Inventory
+              Steam Inventory Summary
             </h2>
           </div>
         </div>
 
         {/* Summary Statistics */}
         <div className="card-body">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             {/* Total Items */}
             <div className="stats-card">
               <div className="text-sm font-medium text-secondary">
@@ -220,15 +343,66 @@ export const SteamInventory: React.FC = () => {
               </div>
             </div>
 
-            {/* Unique Items */}
+            {/* Total Value */}
             <div className="stats-card">
               <div className="text-sm font-medium text-secondary">
-                Unique Items
+                Total Value
               </div>
               <div className="text-2xl font-bold text-primary">
-                {new Set(filteredItems.map(item => item.name)).size}
+                €
+                {filteredItems
+                  .reduce((sum, item) => sum + (item.current_price || 0), 0)
+                  .toFixed(2)}
               </div>
             </div>
+
+            {/* Total Invested */}
+            <div className="stats-card">
+              <div className="text-sm font-medium text-secondary">
+                Total Investment
+              </div>
+              <div className="text-2xl font-bold text-primary">
+                €
+                {filteredItems
+                  .reduce((sum, item) => sum + (item.price_bought || 0), 0)
+                  .toFixed(2)}
+              </div>
+            </div>
+
+            {/* Profit/Loss Summary */}
+            {(() => {
+              const totalValue = filteredItems.reduce(
+                (sum, item) => sum + (item.current_price || 0),
+                0
+              );
+              const totalInvested = filteredItems.reduce(
+                (sum, item) => sum + (item.price_bought || 0),
+                0
+              );
+              const profitLoss = totalValue - totalInvested;
+              const profitLossPercentage =
+                totalInvested > 0 ? (profitLoss / totalInvested) * 100 : 0;
+
+              return (
+                <div className="stats-card">
+                  <div className="text-sm font-medium text-secondary">
+                    Total P&L
+                  </div>
+                  <div
+                    className={`text-2xl font-bold ${
+                      profitLoss >= 0 ? "text-green-600" : "text-red-600"
+                    }`}
+                  >
+                    {profitLoss >= 0 ? "+" : ""}€
+                    {Math.abs(profitLoss).toFixed(2)}
+                    <div className="text-sm font-normal">
+                      ({profitLossPercentage >= 0 ? "+" : ""}
+                      {profitLossPercentage.toFixed(2)}%)
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </div>
       </div>
@@ -242,6 +416,22 @@ export const SteamInventory: React.FC = () => {
             </h2>
 
             <div className="flex gap-2">
+              {/* Update Prices Button */}
+              {items.length > 0 && (
+                <button
+                  onClick={handleUpdatePrices}
+                  className="primary-btn btn-blue text-sm px-3 py-1 flex items-center"
+                  disabled={updatingPrices}
+                >
+                  {updatingPrices ? (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  ) : (
+                    <SearchIcon fontSize="small" className="mr-1" />
+                  )}
+                  {updatingPrices ? "Updating..." : "Update Prices"}
+                </button>
+              )}
+
               {/* Delete All Button */}
               {items.length > 0 && (
                 <button
@@ -265,6 +455,8 @@ export const SteamInventory: React.FC = () => {
                 disabled={
                   !nameFilter &&
                   !rarityFilter &&
+                  !minPrice &&
+                  !maxPrice &&
                   sortBy === "name" &&
                   sortOrder === "asc"
                 }
@@ -313,48 +505,103 @@ export const SteamInventory: React.FC = () => {
                 </select>
               </div>
 
-              {/* Sort By */}
+              {/* Min Price Filter */}
               <div>
                 <label className="block text-xs font-medium text-muted mb-1">
-                  Sort By
+                  Min Price (€)
                 </label>
-                <select
-                  value={sortBy}
-                  onChange={(e) =>
-                    setSortBy(e.target.value as "name" | "rarity")
-                  }
-                  className="w-full px-2 py-1 text-sm border border-primary/20 rounded bg-tertiary text-primary"
-                >
-                  <option value="name">Name</option>
-                  <option value="rarity">Rarity</option>
-                </select>
+                <input
+                  type="number"
+                  value={minPrice}
+                  onChange={(e) => setMinPrice(e.target.value)}
+                  placeholder="0.00"
+                  step="0.01"
+                  min="0"
+                  className="w-full px-2 py-1 text-sm border border-primary/20 rounded bg-tertiary text-primary placeholder-muted"
+                />
               </div>
 
-              {/* Sort Order */}
+              {/* Max Price Filter */}
               <div>
                 <label className="block text-xs font-medium text-muted mb-1">
-                  Sort Order
+                  Max Price (€)
                 </label>
-                <select
-                  value={sortOrder}
-                  onChange={(e) =>
-                    setSortOrder(e.target.value as "asc" | "desc")
-                  }
-                  className="w-full px-2 py-1 text-sm border border-primary/20 rounded bg-tertiary text-primary"
-                >
-                  <option value="asc">
-                    {sortBy === "name" ? "A → Z" : "Low → High"}
-                  </option>
-                  <option value="desc">
-                    {sortBy === "name" ? "Z → A" : "High → Low"}
-                  </option>
-                </select>
+                <input
+                  type="number"
+                  value={maxPrice}
+                  onChange={(e) => setMaxPrice(e.target.value)}
+                  placeholder="999.99"
+                  step="0.01"
+                  min="0"
+                  className="w-full px-2 py-1 text-sm border border-primary/20 rounded bg-tertiary text-primary placeholder-muted"
+                />
+              </div>
+            </div>
+
+            {/* Sort Controls */}
+            <div className="border-t border-primary/20 pt-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Sort By */}
+                <div>
+                  <label className="block text-xs font-medium text-muted mb-1">
+                    Sort By
+                  </label>
+                  <select
+                    value={sortBy}
+                    onChange={(e) =>
+                      setSortBy(
+                        e.target.value as "name" | "rarity" | "price" | "profit"
+                      )
+                    }
+                    className="w-full px-2 py-1 text-sm border border-primary/20 rounded bg-tertiary text-primary"
+                  >
+                    <option value="name">Name</option>
+                    <option value="rarity">Rarity</option>
+                    <option value="price">Current Price</option>
+                    <option value="profit">Profit/Loss</option>
+                  </select>
+                </div>
+
+                {/* Sort Order */}
+                <div>
+                  <label className="block text-xs font-medium text-muted mb-1">
+                    Sort Order
+                  </label>
+                  <select
+                    value={sortOrder}
+                    onChange={(e) =>
+                      setSortOrder(e.target.value as "asc" | "desc")
+                    }
+                    className="w-full px-2 py-1 text-sm border border-primary/20 rounded bg-tertiary text-primary"
+                  >
+                    <option value="asc">
+                      {sortBy === "name"
+                        ? "A → Z"
+                        : sortBy === "rarity"
+                        ? "Low → High"
+                        : sortBy === "price"
+                        ? "Low → High"
+                        : "Loss → Profit"}
+                    </option>
+                    <option value="desc">
+                      {sortBy === "name"
+                        ? "Z → A"
+                        : sortBy === "rarity"
+                        ? "High → Low"
+                        : sortBy === "price"
+                        ? "High → Low"
+                        : "Profit → Loss"}
+                    </option>
+                  </select>
+                </div>
               </div>
             </div>
 
             {/* Active Filters Display */}
             {(nameFilter ||
               rarityFilter ||
+              minPrice ||
+              maxPrice ||
               sortBy !== "name" ||
               sortOrder !== "asc") && (
               <div className="mt-3 pt-3 border-t border-primary/20">
@@ -368,6 +615,16 @@ export const SteamInventory: React.FC = () => {
                   {rarityFilter && (
                     <span className="px-2 py-1 bg-purple/20 text-purple text-xs rounded">
                       Rarity: {rarityFilter}
+                    </span>
+                  )}
+                  {minPrice && (
+                    <span className="px-2 py-1 bg-green/20 text-green text-xs rounded">
+                      Min: €{minPrice}
+                    </span>
+                  )}
+                  {maxPrice && (
+                    <span className="px-2 py-1 bg-green/20 text-green text-xs rounded">
+                      Max: €{maxPrice}
                     </span>
                   )}
                   {(sortBy !== "name" || sortOrder !== "asc") && (
@@ -462,14 +719,92 @@ export const SteamInventory: React.FC = () => {
                       </div>
 
                       {/* Float Value - Show for items that can have float */}
-                      {item.float_value && item.float_value > 0 && (
+                      {item.float_value && item.float_value > 0 ? (
                         <div className="text-xs text-muted mb-2">
                           Float: {item.float_value.toFixed(6)}
                         </div>
-                      )}
+                      ) : null}
+
+                      {/* Prices */}
+                      <div className="space-y-1 mb-3">
+                        <div className="flex justify-between items-end text-xs">
+                          <span className="text-muted">Current:</span>
+                          <span className="text-white font-medium text-2xl">
+                            €{item.current_price?.toFixed(2) || "0.00"}
+                          </span>
+                        </div>
+
+                        {/* Bought Price - Editable */}
+                        <div className="flex justify-between text-xs">
+                          <span className="text-muted">Bought:</span>
+                          {editingItem === itemId ? (
+                            <div className="flex items-center gap-1">
+                              <input
+                                type="number"
+                                value={editPrice}
+                                onChange={(e) => setEditPrice(e.target.value)}
+                                className="w-16 h-5 text-xs px-1 border border-primary/20 rounded bg-tertiary text-primary"
+                                step="0.01"
+                                min="0"
+                              />
+                              <button
+                                onClick={() => handleSavePrice(itemId)}
+                                className="p-1 text-green hover:bg-green/20 rounded"
+                              >
+                                <SaveIcon fontSize="inherit" />
+                              </button>
+                              <button
+                                onClick={handleCancelEdit}
+                                className="p-1 text-red hover:bg-red/20 rounded"
+                              >
+                                <CancelIcon fontSize="inherit" />
+                              </button>
+                            </div>
+                          ) : (
+                            <span
+                              className="text-secondary font-medium"
+                              onClick={() => handleEditPrice(item)}
+                            >
+                              €{item.price_bought?.toFixed(2) || "0.00"}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Profit/Loss */}
+                        {(() => {
+                          const currentPrice = item.current_price || 0;
+                          const boughtPrice = item.price_bought || 0;
+                          const profitLoss = currentPrice - boughtPrice;
+
+                          return (
+                            <div className="flex justify-between text-xs">
+                              <span className="text-muted">P/L:</span>
+                              <span
+                                className={
+                                  profitLoss >= 0
+                                    ? "text-green font-medium"
+                                    : "text-red font-medium"
+                                }
+                              >
+                                {profitLoss >= 0 ? "+" : ""}€
+                                {profitLoss.toFixed(2)}
+                              </span>
+                            </div>
+                          );
+                        })()}
+                      </div>
 
                       {/* Action Buttons */}
-                      <div className="flex justify-center">
+                      <div className="flex justify-between gap-1">
+                        <button
+                          onClick={() => handleEditPrice(item)}
+                          className="primary-btn btn-black text-xs px-2 py-1 flex-1"
+                          disabled={editingItem === itemId}
+                        >
+                          <EditIcon fontSize="inherit" className="mr-1" />
+                          Edit
+                        </button>
+
                         {/* Inspect In-Game Button */}
                         <button
                           onClick={() =>
@@ -480,7 +815,7 @@ export const SteamInventory: React.FC = () => {
                               "_blank"
                             )
                           }
-                          className="primary-btn btn-black text-xs px-2 py-1 flex items-center"
+                          className="primary-btn btn-black text-xs px-2 py-1 flex-1"
                           title="Inspect in CS2"
                         >
                           <SearchIcon fontSize="inherit" className="mr-1" />

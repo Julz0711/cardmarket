@@ -494,6 +494,17 @@ class SteamItemModel:
             logger.error(f"Error deleting steam item {item_id}: {e}")
             raise
     
+    def delete_all_items(self, user_id):
+        """Delete all steam items for a user"""
+        try:
+            result = self.collection.delete_many({"user_id": user_id})
+            logger.info(f"Deleted {result.deleted_count} steam items for user {user_id}")
+            return result.deleted_count
+            
+        except Exception as e:
+            logger.error(f"Error deleting all steam items for user {user_id}: {e}")
+            raise
+    
     # Removed update_item_price method - no pricing updates
     
     def get_user_stats(self, user_id):

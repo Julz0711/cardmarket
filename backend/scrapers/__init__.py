@@ -9,6 +9,7 @@ from .stocks_scraper import StocksScraper
 from .etf_scraper import ETFScraper
 from .crypto_scraper import CryptocurrencyScraper
 from .steam_inventory_scraper import SteamInventoryScraper
+from .csfloat_scraper import CSFloatScraper
 from .scraper_manager import ScraperManager
 
 __all__ = [
@@ -20,5 +21,6 @@ __all__ = [
     'ETFScraper',
     'CryptocurrencyScraper',
     'SteamInventoryScraper',
+    'CSFloatScraper',
     'ScraperManager'
 ]

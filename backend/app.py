@@ -7,6 +7,8 @@ from dotenv import load_dotenv
 
 # Import the new modular scrapers
 from scrapers import ScraperManager, ScraperError, ValidationError
+# Import the CSGOSkins.gg scraper
+from scrapers.csgoskins_scraper import CSGOSkinsGGScraper
 
 # Import MongoDB database models
 from database import mongodb, card_model, steam_item_model
@@ -229,6 +231,7 @@ def scrape_trading_cards():
         return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
 
 @app.route('/api/cards', methods=['GET'])
+@auth_required
 def get_cards():
     """Get all cards with optional filtering"""
     try:
@@ -240,7 +243,7 @@ def get_cards():
         search = request.args.get('search', '').lower()
         
         # Get cards from MongoDB for current user
-        cards = card_model.get_cards(user_id='default_user')
+        cards = card_model.get_cards(user_id=request.current_user['user_id'])
         
         # Apply filters
         if expansion:
@@ -267,7 +270,7 @@ def get_cards():
             'items': cards,
             'total': len(cards),
             'timestamp': datetime.now().isoformat(),
-            'user': 'default_user'
+            'user': request.current_user['user_id']
         })
         
     except Exception as e:
@@ -457,18 +460,21 @@ def get_stats():
 
 
 @app.route('/api/portfolio/summary', methods=['GET'])
+@auth_required
 def get_portfolio_summary():
     """Get portfolio summary across all asset types"""
     try:
         logger.info("Portfolio summary endpoint called")
         
+        user_id = request.current_user['user_id']
+        
         # Use MongoDB aggregation for portfolio summary
-        portfolio_summary = card_model.get_portfolio_summary(user_id='default_user')
+        portfolio_summary = card_model.get_portfolio_summary(user_id=user_id)
         
         logger.info(f"Retrieved portfolio summary from MongoDB: {portfolio_summary}")
         
         # Get cards for top/worst performers
-        cards = card_model.get_cards(user_id='default_user')
+        cards = card_model.get_cards(user_id=user_id)
         
         # Calculate performers
         performers = []
@@ -900,24 +906,22 @@ def scrape_steam_inventory():
         })
         
     except ValidationError as e:
-        logger.error(f"Steam scraper validation error: {e}")
+        logger.warning(f"Validation error in Steam scraping: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 400
-        
     except ScraperError as e:
-        logger.error(f"Steam scraper error: {e}")
+        logger.error(f"Scraper error in Steam scraping: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
-        
     except Exception as e:
-        logger.error(f"Unexpected error in Steam scraper: {e}")
+        logger.error(f"Unexpected error in Steam scraping: {e}")
         return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
-
 
 # Steam Inventory Management Routes
 @app.route('/api/steam/items', methods=['GET'])
+@auth_required
 def get_steam_items():
     """Get user's Steam inventory items"""
     try:
-        user_id = 'default_user'
+        user_id = request.current_user['user_id']
         
         # Get pagination parameters
         page = int(request.args.get('page', 1))
@@ -988,6 +992,35 @@ def delete_steam_item(item_id):
         logger.error(f"Error deleting Steam item: {e}")
         return jsonify({'status': 'error', 'message': 'Failed to delete Steam item'}), 500
 
+
+@app.route('/api/steam/items', methods=['DELETE'])
+def delete_all_steam_items():
+    """Delete all Steam inventory items for default user (admin function)"""
+    try:
+        user_id = 'default_user'  # Target the default user specifically
+        
+        if not steam_item_model:
+            return jsonify({'status': 'error', 'message': 'Steam item model not available'}), 503
+        
+        # Get current count before deletion
+        items = steam_item_model.get_items_by_user(user_id)
+        items_count = len(items)
+        
+        # Delete all Steam items for the default user
+        deleted_count = steam_item_model.delete_all_items(user_id)
+        
+        logger.info(f"Deleted all {deleted_count} Steam items for user '{user_id}'")
+        
+        return jsonify({
+            'status': 'success',
+            'message': f'Successfully deleted all {deleted_count} Steam items for default user',
+            'deleted_count': deleted_count,
+            'total_steam_items': 0
+        })
+        
+    except Exception as e:
+        logger.error(f"Error deleting all Steam items: {e}")
+        return jsonify({'status': 'error', 'message': 'Failed to delete all Steam items'}), 500
 
 @app.route('/api/steam/stats', methods=['GET'])
 @auth_required
@@ -1219,6 +1252,143 @@ def get_all_users():
     except Exception as e:
         logger.error(f"Error fetching users: {str(e)}")
         return jsonify({'error': 'Failed to fetch users'}), 500
+
+@app.route('/api/steam/update-prices', methods=['POST'])
+@auth_required
+def update_steam_prices():
+    """Update Steam item prices using CSFloat market data"""
+    try:
+        data = request.get_json()
+        user_id = request.current_user['user_id']
+        
+        # Get parameters
+        item_ids = data.get('item_ids', [])  # Specific items to update, empty means all
+        headless = data.get('headless', True)
+        
+        # Get Steam items for the user
+        if item_ids:
+            # Update specific items
+            from bson import ObjectId
+            items = []
+            for item_id in item_ids:
+                item = steam_item_model.collection.find_one({"_id": ObjectId(item_id), "user_id": user_id})
+                if item:
+                    items.append(item)
+        else:
+            # Update all items
+            items = steam_item_model.get_items_by_user(user_id)
+        
+        if not items:
+            return jsonify({
+                'status': 'error',
+                'message': 'No Steam items found to update'
+            }), 400
+        
+        logger.info(f"Starting price update for {len(items)} Steam items")
+        
+        # Initialize CSGOSkins.gg scraper
+        scraper = CSGOSkinsGGScraper(headless=headless)
+        
+        updated_items = []
+        failed_items = []
+        skipped_items = []
+        
+        # Prepare items data for CSGOSkins.gg scraper
+        items_for_pricing = []
+        for item in items:
+            # Extract condition from item name or use stored condition
+            condition = item.get('condition') or scraper.extract_condition_from_name(item['name'])
+            
+            items_for_pricing.append({
+                'item_id': str(item['_id']),
+                'name': item['name'],
+                'condition': condition
+            })
+        
+        # Scrape prices from CSGOSkins.gg
+        price_results = scraper.scrape_item_prices(items_for_pricing)
+        
+        # Create a mapping of item names to prices
+        price_map = {}
+        for result in price_results:
+            key = f"{result['item_name']}_{result.get('condition', '')}"
+            price_map[key] = result['price']
+        
+        # Update items with new prices
+        for item in items:
+            try:
+                item_id = str(item['_id'])
+                condition = item.get('condition') or scraper.extract_condition_from_name(item['name'])
+                clean_name = scraper.clean_item_name(item['name'])
+                
+                # Look for price in results
+                price_key = f"{clean_name}_{condition or ''}"
+                
+                if price_key in price_map:
+                    # Convert USD to EUR (approximate conversion, you might want to use a real exchange rate API)
+                    usd_price = price_map[price_key]
+                    eur_price = usd_price * 0.85  # Rough USD to EUR conversion
+                    
+                    # Update item in database
+                    update_result = steam_item_model.update_item(item_id, {
+                        'current_price': eur_price,
+                        'price_source': 'csgoskins.gg',
+                        'last_updated': datetime.now().isoformat()
+                    })
+                    
+                    if update_result:
+                        item['current_price'] = eur_price
+                        item['price_source'] = 'csfloat.com'
+                        updated_items.append(item)
+                        logger.info(f"Updated price for {item['name']}: €{eur_price:.2f}")
+                    else:
+                        failed_items.append({
+                            'name': item['name'],
+                            'error': 'Database update failed'
+                        })
+                else:
+                    skipped_items.append({
+                        'name': item['name'],
+                        'reason': 'No price found on CSFloat'
+                    })
+                    
+            except Exception as e:
+                logger.error(f"Error updating item {item['name']}: {e}")
+                failed_items.append({
+                    'name': item['name'],
+                    'error': str(e)
+                })
+        
+        # Prepare response
+        message_parts = []
+        if updated_items:
+            message_parts.append(f"Updated prices for {len(updated_items)} items")
+        if skipped_items:
+            message_parts.append(f"skipped {len(skipped_items)} items (no price found)")
+        if failed_items:
+            message_parts.append(f"failed to update {len(failed_items)} items")
+        
+        response_message = " and ".join(message_parts) if message_parts else "No items were processed"
+        
+        return jsonify({
+            'status': 'success',
+            'message': response_message,
+            'updated_items': len(updated_items),
+            'skipped_items': len(skipped_items),
+            'failed_items': len(failed_items),
+            'details': {
+                'updated': [{'name': item['name'], 'price': item['current_price']} for item in updated_items],
+                'skipped': skipped_items,
+                'failed': failed_items
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Error updating Steam prices: {e}")
+        return jsonify({
+            'status': 'error',
+            'message': f'Failed to update Steam prices: {str(e)}'
+        }), 500
 
 if __name__ == '__main__':
     logger.info("Starting Portfolio Manager API...")

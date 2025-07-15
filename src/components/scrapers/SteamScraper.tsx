@@ -14,9 +14,6 @@ export const SteamScraper: React.FC<SteamScraperProps> = ({
   const [formData, setFormData] = useState({
     steamId: "76561198205836117", // Pre-fill with the user's Steam ID
     appId: "730", // CS2
-    includeFloats: false, // Default to false for faster scraping
-    includePrices: true, // NEW: Enable pricing by default
-    enablePricing: true, // NEW: Enable pricing service
     headless: true,
   });
   const [isLoading, setIsLoading] = useState(false);
@@ -48,9 +45,6 @@ export const SteamScraper: React.FC<SteamScraperProps> = ({
       const response = await apiClient.scrapeSteam({
         steam_id: formData.steamId,
         app_id: formData.appId || "730",
-        include_floats: formData.includeFloats,
-        include_prices: formData.includePrices, // NEW: Include pricing
-        enable_pricing: formData.enablePricing, // NEW: Enable pricing service
         headless: true,
       });
 
@@ -76,9 +70,6 @@ export const SteamScraper: React.FC<SteamScraperProps> = ({
       setFormData({
         steamId: "",
         appId: "730",
-        includeFloats: false,
-        includePrices: true,
-        enablePricing: true,
         headless: true,
       });
     } catch (err) {
@@ -152,62 +143,8 @@ export const SteamScraper: React.FC<SteamScraperProps> = ({
                 onChange={handleInputChange}
                 className="select w-full"
               >
-                <option value="">All Games</option>
                 <option value="730">Counter-Strike 2</option>
-                <option value="570">Dota 2</option>
-                <option value="440">Team Fortress 2</option>
-                <option value="252490">Rust</option>
-                <option value="304930">Unturned</option>
               </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                id="includeFloats"
-                name="includeFloats"
-                checked={formData.includeFloats}
-                onChange={handleInputChange}
-                className="h-4 w-4 text-blue focus:ring-blue border-primary bg-tertiary rounded"
-              />
-              <label
-                htmlFor="includeFloats"
-                className="ml-2 block text-sm text-secondary"
-              >
-                Include Float Values & Pattern Index (MUCH slower - can take 5+
-                minutes for large inventories)
-              </label>
-            </div>
-
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                id="includePrices"
-                name="includePrices"
-                checked={formData.includePrices}
-                onChange={handleInputChange}
-                className="h-4 w-4 text-blue focus:ring-blue border-primary bg-tertiary rounded"
-              />
-              <label
-                htmlFor="includePrices"
-                className="ml-2 block text-sm text-secondary"
-              >
-                Include Steam Market Prices (adds ~2-3 seconds per item due to rate limiting)
-              </label>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4">
-            <div>
-              <p className="text-xs text-muted">
-                ⚡ Fast Mode: Name, Rarity, Condition only
-                <br />
-                💰 Price Mode: Adds Steam Community Market pricing (recommended)
-                <br />
-                🐌 Float Mode: Adds Float Values and Pattern Index (requires browser automation)
-              </p>
             </div>
           </div>
         </div>
@@ -248,9 +185,9 @@ export const SteamScraper: React.FC<SteamScraperProps> = ({
         <div className="mt-4 text-sm text-muted">
           <p>
             <strong>Note:</strong> Your Steam inventory must be set to public
-            for this to work. Pricing data is fetched from Steam Community Market
-            with rate limiting (2-3 seconds per item). CS2 items will include 
-            float values when enabled (much slower).
+            for this to work. The scraper will import item names, rarities, and
+            conditions. Use the "Update Prices" button in your Steam inventory
+            for accurate CSFloat market prices.
           </p>
         </div>
       </div>

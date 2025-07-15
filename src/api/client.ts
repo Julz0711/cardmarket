@@ -417,6 +417,50 @@ class ApiClient {
       method: "POST",
     });
   }
+
+  async updateSteamPrices(data: {
+    item_ids?: string[];
+    headless?: boolean;
+  }): Promise<{
+    status: string;
+    message: string;
+    updated_items: number;
+    skipped_items: number;
+    failed_items: number;
+    details: {
+      updated: Array<{ name: string; price: number }>;
+      skipped: Array<{ name: string; reason: string }>;
+      failed: Array<{ name: string; error: string }>;
+    };
+  }> {
+    // Price updating can take a long time, so use a longer timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 600000); // 10 minute timeout
+
+    try {
+      const result = await this.request<{
+        status: string;
+        message: string;
+        updated_items: number;
+        skipped_items: number;
+        failed_items: number;
+        details: {
+          updated: Array<{ name: string; price: number }>;
+          skipped: Array<{ name: string; reason: string }>;
+          failed: Array<{ name: string; error: string }>;
+        };
+      }>("/steam/update-prices", {
+        method: "POST",
+        body: JSON.stringify(data),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      return result;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      throw error;
+    }
+  }
 }
 
 export const apiClient = new ApiClient();

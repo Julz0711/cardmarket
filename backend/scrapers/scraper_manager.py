@@ -69,11 +69,10 @@ class ScraperManager:
             from .trading_cards_scraper import TradingCardsScraper
             headless = kwargs.pop('headless')
             scraper = TradingCardsScraper(headless=headless)
-        elif scraper_type == 'steam' and ('headless' in kwargs or 'enable_pricing' in kwargs):
+        elif scraper_type == 'steam' and 'headless' in kwargs:
             from .steam_inventory_scraper import SteamInventoryScraper
             headless = kwargs.pop('headless', True)
-            enable_pricing = kwargs.pop('enable_pricing', False)
-            scraper = SteamInventoryScraper(headless=headless, enable_pricing=enable_pricing)
+            scraper = SteamInventoryScraper(headless=headless)
         else:
             scraper = self.scrapers[scraper_type]
         

@@ -462,6 +462,8 @@ class SteamInventoryScraper(BaseScraper):
             elif 'tool' in tag_name or 'tool' in tag_localized:
                 if 'key' in name_lower:
                     return 'key'
+                elif 'charm' in name_lower:
+                    return 'charm'
                 return 'tool'
             elif 'graffiti' in tag_name or 'graffiti' in tag_localized:
                 return 'spray'
@@ -472,17 +474,39 @@ class SteamInventoryScraper(BaseScraper):
                     return 'coin'
                 elif 'charm' in name_lower:
                     return 'charm'
+                elif 'pin' in name_lower:
+                    return 'pin'
                 return 'collectible'
+            elif 'patch' in tag_name or 'patch' in tag_localized:
+                return 'patch'
         
-        # Fallback to name-based detection
+        # Enhanced fallback to name-based detection with all categories
         if 'knife' in name_lower or 'karambit' in name_lower or 'bayonet' in name_lower:
             return 'knife'
-        elif 'gloves' in name_lower or 'glove' in name_lower:
+        elif 'gloves' in name_lower or 'glove' in name_lower or 'wraps' in name_lower:
             return 'gloves'
         elif 'sticker' in name_lower:
             return 'sticker'
-        elif 'case' in name_lower or 'capsule' in name_lower:
+        elif 'case' in name_lower and ('weapon case' in name_lower or 'container' in name_lower):
             return 'case'
+        elif 'capsule' in name_lower:
+            if 'sticker capsule' in name_lower:
+                return 'sticker_capsule'
+            elif 'autograph capsule' in name_lower:
+                return 'autograph_capsule'
+            elif 'collectible capsule' in name_lower:
+                return 'collectible_capsule'
+            return 'capsule'
+        elif 'souvenir package' in name_lower:
+            return 'souvenir_package'
+        elif 'collection package' in name_lower:
+            return 'collection_package'
+        elif 'patch pack' in name_lower:
+            return 'patch_pack'
+        elif 'graffiti box' in name_lower:
+            return 'graffiti_box'
+        elif 'music kit box' in name_lower:
+            return 'music_kit_box'
         elif 'key' in name_lower or ' key' in name_lower:
             return 'key'
         elif 'music kit' in name_lower:
@@ -495,6 +519,18 @@ class SteamInventoryScraper(BaseScraper):
             return 'coin'
         elif 'charm' in name_lower:
             return 'charm'
+        elif 'patch' in name_lower:
+            return 'patch'
+        elif 'pin' in name_lower:
+            return 'pin'
+        elif 'pass' in name_lower:
+            return 'pass'
+        elif 'gift' in name_lower:
+            return 'gift'
+        elif 'collectible' in name_lower:
+            return 'collectible'
+        elif 'tag' in name_lower:
+            return 'tag'
         elif any(weapon in name_lower for weapon in ['ak-47', 'awp', 'm4a4', 'm4a1-s', 'glock', 'usp', 'deagle']):
             return 'weapon'
         
