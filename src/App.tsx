@@ -1,13 +1,17 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import AssetTable from "./components/common/AssetTable";
 import PortfolioSummary from "./components/portfolio/PortfolioSummary";
+import UserManagement from "./components/admin/UserManagement";
 import { CardsScraper } from "./components/scrapers/CardsScraper";
 import { StocksScraper } from "./components/scrapers/StocksScraper";
 import { CryptoScraper } from "./components/scrapers/CryptoScraper";
 import { ETFScraper } from "./components/scrapers/ETFScraper";
 import { SteamScraper } from "./components/scrapers/SteamScraper";
+import { SteamInventory } from "./components/SteamInventory";
 import { api, type Asset, type AssetType, type Card } from "./api/client";
 import type { PortfolioSummary as PortfolioSummaryType } from "./types/assets";
+import { AuthProvider, useAuth } from "./contexts/AuthContext";
+import { AuthButton } from "./components/Auth/AuthButton";
 
 // Material Icons
 import DashboardIcon from "@mui/icons-material/Dashboard";
@@ -17,7 +21,7 @@ import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import AccountBalanceIcon from "@mui/icons-material/AccountBalance";
 import CurrencyBitcoinIcon from "@mui/icons-material/CurrencyBitcoin";
 import SportsEsportsIcon from "@mui/icons-material/SportsEsports";
-import BusinessCenterIcon from "@mui/icons-material/BusinessCenter";
+import PeopleIcon from "@mui/icons-material/People";
 
 function App() {
   const [portfolioSummary, setPortfolioSummary] =
@@ -53,53 +57,19 @@ function App() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeSection, setActiveSection] = useState<
-    AssetType | "dashboard" | "scrapers"
-  >("dashboard");
-  const [activeScraperTab, setActiveScraperTab] = useState<AssetType>("cards");
 
-  // Load initial data
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadCards = async () => {
-    try {
-      console.log("Loading stored cards from backend...");
-      const cardsResponse = await api.getCards();
-      console.log("Cards loaded:", cardsResponse);
-      setAssets((prev) => ({
-        ...prev,
-        cards: cardsResponse.items || [],
-      }));
-    } catch (cardsError) {
-      console.warn("Failed to load cards:", cardsError);
-      setAssets((prev) => ({
-        ...prev,
-        cards: [],
-      }));
-    }
-  };
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
 
-      console.log("Starting to load portfolio data...");
-
       // Try to load portfolio summary from backend
-      console.log("Calling api.getPortfolioSummary()...");
       try {
         const summary = await api.getPortfolioSummary();
-        console.log("Portfolio summary received:", summary);
         setPortfolioSummary(summary);
       } catch (apiError) {
-        console.warn(
-          "Portfolio API call failed, using empty summary:",
-          apiError
-        );
-        // Use empty portfolio if API fails
+        console.warn("Failed to get portfolio summary from backend:", apiError);
+        // Initialize with empty summary if API fails
         setPortfolioSummary({
           total_portfolio_value: 0,
           total_investment: 0,
@@ -117,11 +87,9 @@ function App() {
         });
       }
 
-      // Note: Load stored cards from backend
-      console.log("Loading stored cards from backend...");
+      // Load cards directly without using the callback to avoid dependency loop
       try {
         const cardsResponse = await api.getCards();
-        console.log("Cards loaded:", cardsResponse);
         setAssets((prev) => ({
           ...prev,
           cards: cardsResponse.items || [],
@@ -134,286 +102,327 @@ function App() {
         }));
       }
 
-      console.log("Data loading completed successfully");
-    } catch (err) {
-      console.error("Error in loadData:", err);
-      setError(err instanceof Error ? err.message : "Failed to load data");
-      console.error("Failed to load data:", err);
+      // Load steam inventory items
+      try {
+        const steamResponse = await api.getSteamItems(1, 1000);
+        setAssets((prev) => ({
+          ...prev,
+          steam: steamResponse.items || [],
+        }));
+      } catch (steamError) {
+        console.warn("Failed to load steam items:", steamError);
+        setAssets((prev) => ({
+          ...prev,
+          steam: [],
+        }));
+      }
+    } catch (error) {
+      console.error("Failed to load portfolio data:", error);
+      setError("Failed to load portfolio data. Please try again.");
     } finally {
       setLoading(false);
     }
+  }, []); // Remove dependency to prevent infinite loop
+
+  return (
+    <AuthProvider onAuthChange={loadData}>
+      <AppContent
+        portfolioSummary={portfolioSummary}
+        assets={assets}
+        loading={loading}
+        error={error}
+        loadData={loadData}
+        setError={setError}
+      />
+    </AuthProvider>
+  );
+}
+
+function AppContent({
+  portfolioSummary,
+  assets,
+  loading,
+  error,
+  loadData,
+  setError,
+}: {
+  portfolioSummary: PortfolioSummaryType;
+  assets: {
+    cards: Card[];
+    stocks: Asset[];
+    etfs: Asset[];
+    crypto: Asset[];
+    steam: Asset[];
   };
+  loading: boolean;
+  error: string | null;
+  loadData: () => Promise<void>;
+  setError: (error: string | null) => void;
+}) {
+  const { isLoading } = useAuth();
+
+  const [activeSection, setActiveSection] = useState<
+    AssetType | "dashboard" | "scrapers" | "users"
+  >("dashboard");
+  const [activeScraperTab, setActiveScraperTab] = useState<AssetType>("cards");
+
+  // Load initial data only after authentication is ready
+  useEffect(() => {
+    if (!isLoading) {
+      loadData();
+    }
+  }, [isLoading]); // Remove loadData dependency to prevent infinite loop
+
+  // Show loading spinner while authentication is initializing OR while loading data
+  if (isLoading || loading) {
+    return (
+      <div className="min-h-screen min-w-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 bg-gray-200 rounded-full animate-pulse mx-auto mb-4" />
+          <p className="text-muted">
+            {isLoading ? "Initializing..." : "Loading data..."}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const handleSetBuyPrice = async (id: number, buyPrice: number) => {
     try {
       await api.updateCardBuyPrice(id, buyPrice);
-      // Refresh the cards to show updated data
-      await loadCards();
-    } catch (err) {
+      // Refresh data after updating buy price
+      await loadData();
+    } catch (error) {
+      console.error("Failed to update buy price:", error);
       setError(
-        err instanceof Error ? err.message : "Failed to update buy price"
+        error instanceof Error ? error.message : "Failed to update buy price"
       );
     }
   };
 
-  const handleAssetDelete = async (id: number) => {
-    if (!confirm("Are you sure you want to delete this item?")) {
-      return;
-    }
-
-    try {
-      // Note: New backend doesn't store data, so deletion is just removing from local state
-      // In a real implementation, this would delete from a database
-      console.log("Delete asset with id:", id);
-      setError("Deletion not implemented in scraper-only mode");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to delete item");
-    }
+  const handleCardsScraping = async () => {
+    console.log("Cards scraping completed");
+    await loadData(); // Reload to get updated portfolio
   };
 
-  const getSectionIcon = (section: AssetType | "dashboard" | "scrapers") => {
-    switch (section) {
+  const renderSectionContent = () => {
+    if (error) {
+      return (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <svg
+                className="h-5 w-5 text-red-400"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-red-800">Error</h3>
+              <div className="mt-2 text-sm text-red-700">{error}</div>
+              <div className="mt-4">
+                <button
+                  onClick={loadData}
+                  className="primary-btn btn-red text-sm"
+                >
+                  Try Again
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    switch (activeSection) {
       case "dashboard":
-        return <DashboardIcon fontSize="small" />;
+        return <PortfolioSummary summary={portfolioSummary} />;
+      case "cards":
+        return (
+          <AssetTable
+            assets={assets.cards}
+            assetType="cards"
+            onDataUpdate={loadData}
+            onSetBuyPrice={handleSetBuyPrice}
+          />
+        );
+      case "stocks":
+        return (
+          <AssetTable
+            assets={assets.stocks}
+            assetType="stocks"
+            onDataUpdate={loadData}
+          />
+        );
+      case "etfs":
+        return (
+          <AssetTable
+            assets={assets.etfs}
+            assetType="etfs"
+            onDataUpdate={loadData}
+          />
+        );
+      case "crypto":
+        return (
+          <AssetTable
+            assets={assets.crypto}
+            assetType="crypto"
+            onDataUpdate={loadData}
+          />
+        );
+      case "steam":
+        return <SteamInventory />;
       case "scrapers":
-        return <DataObjectIcon fontSize="small" />;
-      case "cards":
-        return <StyleIcon fontSize="small" />;
-      case "stocks":
-        return <TrendingUpIcon fontSize="small" />;
-      case "etfs":
-        return <AccountBalanceIcon fontSize="small" />;
-      case "crypto":
-        return <CurrencyBitcoinIcon fontSize="small" />;
-      case "steam":
-        return <SportsEsportsIcon fontSize="small" />;
+        return (
+          <div className="space-y-6">
+            {/* Scraper Tabs */}
+            <div>
+              <nav className="mb-px flex space-x-4">
+                {[
+                  {
+                    type: "cards" as AssetType,
+                    label: "Trading Cards",
+                    icon: StyleIcon,
+                  },
+                  {
+                    type: "stocks" as AssetType,
+                    label: "Stocks",
+                    icon: TrendingUpIcon,
+                  },
+                  {
+                    type: "etfs" as AssetType,
+                    label: "ETFs",
+                    icon: AccountBalanceIcon,
+                  },
+                  {
+                    type: "crypto" as AssetType,
+                    label: "Crypto",
+                    icon: CurrencyBitcoinIcon,
+                  },
+                  {
+                    type: "steam" as AssetType,
+                    label: "Steam Inventory",
+                    icon: SportsEsportsIcon,
+                  },
+                ].map(({ type, label, icon: Icon }) => (
+                  <button
+                    key={type}
+                    onClick={() => setActiveScraperTab(type)}
+                    className={`nav-primary nav-sm ${
+                      activeScraperTab === type ? "active" : ""
+                    }`}
+                  >
+                    <Icon className="mr-2" />
+                    {label}
+                  </button>
+                ))}
+              </nav>
+            </div>
+
+            {/* Scraper Content */}
+            <div>
+              {activeScraperTab === "cards" && (
+                <CardsScraper onScrapingComplete={handleCardsScraping} />
+              )}
+              {activeScraperTab === "stocks" && (
+                <StocksScraper onScrapingComplete={() => {}} />
+              )}
+              {activeScraperTab === "etfs" && (
+                <ETFScraper onScrapingComplete={() => {}} />
+              )}
+              {activeScraperTab === "crypto" && (
+                <CryptoScraper onScrapingComplete={() => {}} />
+              )}
+              {activeScraperTab === "steam" && (
+                <SteamScraper onScrapingComplete={() => {}} />
+              )}
+            </div>
+          </div>
+        );
+      case "users":
+        return <UserManagement />;
       default:
-        return <DashboardIcon fontSize="small" />;
+        return <PortfolioSummary summary={portfolioSummary} />;
     }
   };
-
-  const renderScraperContent = () => {
-    switch (activeScraperTab) {
-      case "cards":
-        return <CardsScraper onScrapingComplete={loadCards} />;
-      case "stocks":
-        return <StocksScraper onScrapingComplete={loadData} />;
-      case "etfs":
-        return <ETFScraper onScrapingComplete={loadData} />;
-      case "crypto":
-        return <CryptoScraper onScrapingComplete={loadData} />;
-      case "steam":
-        return <SteamScraper onScrapingComplete={loadData} />;
-      default:
-        return <CardsScraper onScrapingComplete={loadCards} />;
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen w-screen bg-primary flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto loading-spinner"></div>
-          <p className="mt-4 text-secondary">Loading Portfolio data...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen min-w-screen bg-primary flex items-center justify-center">
-        <div className="text-center">
-          <div className="alert-error mb-4">
-            <p className="font-bold">Error loading data</p>
-            <p>{error}</p>
-          </div>
-          <button
-            onClick={loadData}
-            className="btn-primary font-bold py-2 px-4 rounded"
-          >
-            Retry
-          </button>
-          <div className="mt-4 text-sm text-muted">
-            <p>Make sure the backend server is running on localhost:5000</p>
-            <p>
-              You can start it by running:{" "}
-              <code className="bg-tertiary px-1 py-0.5 rounded text-primary">
-                python backend/app.py
-              </code>
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
-    <div className="min-h-screen min-w-screen flex justify-center bg-primary">
-      <div className="container px-6 py-8">
+    <div className="min-h-screen min-w-screen bg-background">
+      <div className="container mx-auto px-4 py-6">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-primary mb-2 flex items-center gap-3">
-            Portfolio Manager
-          </h1>
-          <p className="text-secondary">
-            Manage and track your investment portfolio across multiple asset
-            classes
-          </p>
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground">
+              Portfolio Manager
+            </h1>
+            <p className="text-muted mt-1">
+              Track your investments across multiple asset classes
+            </p>
+          </div>
+          <AuthButton onUserManagementClick={() => setActiveSection("users")} />
         </div>
 
-        {/* Main Navigation */}
-        <div className="mb-6">
-          <nav className="-mb-px flex space-x-4">
-            <button
-              onClick={() => setActiveSection("dashboard")}
-              className={`py-2 px-1 font-medium text-sm flex items-center gap-2 ${
-                activeSection === "dashboard" ? "tab-active" : "tab-inactive"
-              }`}
-            >
-              {getSectionIcon("dashboard")} Dashboard
-            </button>
-            <button
-              onClick={() => setActiveSection("scrapers")}
-              className={`py-2 px-1 font-medium text-sm flex items-center gap-2 ${
-                activeSection === "scrapers" ? "tab-active" : "tab-inactive"
-              }`}
-            >
-              {getSectionIcon("scrapers")} Scrapers
-            </button>
-            {(
-              ["cards", "stocks", "etfs", "crypto", "steam"] as AssetType[]
-            ).map((assetType) => (
+        {/* Navigation */}
+        <div className="mb-8">
+          <nav className="flex space-x-4">
+            {[
+              { key: "dashboard", label: "Dashboard", icon: DashboardIcon },
+              { key: "scrapers", label: "Data Sources", icon: DataObjectIcon },
+              { key: "cards", label: "Trading Cards", icon: StyleIcon },
+              { key: "stocks", label: "Stocks", icon: TrendingUpIcon },
+              { key: "etfs", label: "ETFs", icon: AccountBalanceIcon },
+              { key: "crypto", label: "Crypto", icon: CurrencyBitcoinIcon },
+              {
+                key: "steam",
+                label: "Steam Inventory",
+                icon: SportsEsportsIcon,
+              },
+            ].map(({ key, label, icon: Icon }) => (
               <button
-                key={assetType}
-                onClick={() => setActiveSection(assetType)}
-                className={`py-2 px-1 font-medium text-sm flex items-center gap-2 capitalize relative ${
-                  activeSection === assetType ? "tab-active" : "tab-inactive"
+                key={key}
+                onClick={() =>
+                  setActiveSection(
+                    key as AssetType | "dashboard" | "scrapers" | "users"
+                  )
+                }
+                className={`nav-primary ${
+                  activeSection === key ? "active" : ""
                 }`}
               >
-                {getSectionIcon(assetType)} {assetType}
-                {assets[assetType].length > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-medium min-w-[20px]">
-                    {assets[assetType].length > 99
-                      ? "99+"
-                      : assets[assetType].length}
-                  </span>
-                )}
+                <Icon className="nav-icon" />
+                {label}
+                {/* Add notification badge for asset counts */}
+                {["cards", "stocks", "etfs", "crypto", "steam"].includes(key) &&
+                  assets[key as AssetType].length > 0 && (
+                    <span className="nav-badge">
+                      {assets[key as AssetType].length > 99
+                        ? "99+"
+                        : assets[key as AssetType].length}
+                    </span>
+                  )}
               </button>
             ))}
           </nav>
         </div>
 
-        {/* Content */}
-        {activeSection === "dashboard" ? (
-          <>
-            {/* Portfolio Summary */}
-            <PortfolioSummary summary={portfolioSummary} />
-
-            {/* Quick Asset Overview */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-              {(
-                ["cards", "stocks", "etfs", "crypto", "steam"] as AssetType[]
-              ).map(
-                (assetType) =>
-                  assets[assetType].length > 0 && (
-                    <div key={assetType} className="card">
-                      <div className="card-header">
-                        <h3 className="text-lg font-semibold text-primary capitalize flex items-center gap-2">
-                          {getSectionIcon(assetType)} {assetType}
-                        </h3>
-                      </div>
-                      <div className="card-body">
-                        <div className="space-y-2">
-                          <div className="flex justify-between">
-                            <span className="text-secondary">Items:</span>
-                            <span className="text-primary font-medium">
-                              {assets[assetType].length}
-                            </span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-secondary">Value:</span>
-                            <span className="text-primary font-medium">
-                              €
-                              {portfolioSummary.asset_breakdown[
-                                assetType
-                              ].value.toFixed(2)}
-                            </span>
-                          </div>
-                          <button
-                            onClick={() => setActiveSection(assetType)}
-                            className="w-full mt-3 btn-secondary text-sm py-2"
-                          >
-                            View Details
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )
-              )}
-            </div>
-          </>
-        ) : activeSection === "scrapers" ? (
-          <>
-            {/* Scraper Tab Navigation */}
-            <div className="mb-6">
-              <div className="">
-                <nav className="-mb-px flex space-x-8">
-                  {(
-                    [
-                      "cards",
-                      "stocks",
-                      "etfs",
-                      "crypto",
-                      "steam",
-                    ] as AssetType[]
-                  ).map((assetType) => (
-                    <button
-                      key={assetType}
-                      onClick={() => setActiveScraperTab(assetType)}
-                      className={`py-2 px-1 font-medium text-sm flex items-center gap-2 capitalize relative ${
-                        activeScraperTab === assetType
-                          ? "tab-active"
-                          : "tab-inactive"
-                      }`}
-                    >
-                      {getSectionIcon(assetType)} {assetType}
-                      {assets[assetType].length > 0 && (
-                        <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-medium min-w-[20px]">
-                          {assets[assetType].length > 99
-                            ? "99+"
-                            : assets[assetType].length}
-                        </span>
-                      )}
-                    </button>
-                  ))}
-                </nav>
-              </div>
-            </div>
-
-            {/* Scraper Content */}
-            {renderScraperContent()}
-          </>
-        ) : (
-          <>
-            {/* Individual Asset Section */}
-            <AssetTable
-              assets={assets[activeSection as AssetType]}
-              assetType={activeSection as AssetType}
-              onAssetDelete={handleAssetDelete}
-              onSetBuyPrice={handleSetBuyPrice}
-              onDataUpdate={loadData}
-            />
-          </>
-        )}
+        {/* Main Content */}
+        <div className="bg-card rounded-lg shadow-sm">
+          <div>{renderSectionContent()}</div>
+        </div>
 
         {/* Footer */}
         <div className="mt-8 text-center text-muted text-sm">
-          <p>Portfolio Manager - Built with React + Vite + Tailwind CSS</p>
-          <p className="mt-1">
+          <p>Portfolio Manager - by Julz & Gaggles</p>
+          <p className="mt-1 flex items-center justify-center gap-1">
             Backend API:{" "}
             <span className="inline-flex items-center">
-              <span className="w-2 h-2 bg-green rounded-full mr-1"></span>
+              <span className="w-2 h-2 bg-green-500 rounded-full mr-1"></span>
               Connected
             </span>
           </p>

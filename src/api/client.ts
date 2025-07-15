@@ -10,6 +10,7 @@ import type {
   PortfolioSummary,
   CardStats,
 } from "../types/assets";
+import { authService } from "../services/auth";
 
 const API_BASE_URL = "http://localhost:5000/api";
 
@@ -44,6 +45,7 @@ class ApiClient {
     const config: RequestInit = {
       headers: {
         "Content-Type": "application/json",
+        ...authService.getAuthHeaders(),
         ...options.headers,
       },
       ...options,
@@ -174,8 +176,18 @@ class ApiClient {
     return this.getAssetsByType("crypto") as Promise<ApiResponse<Crypto[]>>;
   }
 
-  async getSteamItems(): Promise<ApiResponse<SteamItem[]>> {
-    return this.getAssetsByType("steam") as Promise<ApiResponse<SteamItem[]>>;
+  // Steam Inventory Management - Updated
+  async getSteamItems(
+    page = 1,
+    perPage = 50
+  ): Promise<{
+    status: string;
+    items: SteamItem[];
+    page: number;
+    per_page: number;
+    total: number;
+  }> {
+    return this.request(`/steam/items?page=${page}&per_page=${perPage}`);
   }
 
   // Import from pandas
@@ -195,6 +207,20 @@ class ApiClient {
     return this.request("/health");
   }
 
+  // User management
+  async getAllUsers(): Promise<{
+    users: Array<{
+      id: string;
+      username: string;
+      email: string;
+      created_at: string;
+      last_login?: string;
+    }>;
+    total: number;
+  }> {
+    return this.request("/auth/users");
+  }
+
   // Scraping endpoints - Cards
   async scrapeCards(data: {
     tcg: string;
@@ -204,6 +230,11 @@ class ApiClient {
   }): Promise<{
     message: string;
     scraped_cards: Card[];
+    skipped_cards?: Array<{
+      number: number;
+      name: string;
+      message: string;
+    }>;
     total_cards: number;
   }> {
     return this.request("/scrape/cards", {
@@ -257,15 +288,91 @@ class ApiClient {
     });
   }
 
-  // Scraping endpoints - Steam (placeholder)
-  async scrapeSteam(data: { steamId: string; appId?: string }): Promise<{
+  // Steam Inventory Management
+  async updateSteamItem(
+    itemId: string,
+    data: {
+      price_bought?: number;
+      [key: string]: any;
+    }
+  ): Promise<{
+    status: string;
     message: string;
-    scraped_items: SteamItem[];
+    item: SteamItem;
   }> {
-    return this.request("/scrape/steam", {
-      method: "POST",
+    return this.request(`/steam/items/${itemId}`, {
+      method: "PUT",
       body: JSON.stringify(data),
     });
+  }
+
+  async deleteSteamItem(itemId: string): Promise<{
+    status: string;
+    message: string;
+  }> {
+    return this.request(`/steam/items/${itemId}`, {
+      method: "DELETE",
+    });
+  }
+
+  async getSteamStats(): Promise<{
+    status: string;
+    stats: {
+      total_items: number;
+      total_value: number;
+      total_bought: number;
+      avg_value: number;
+      rarity_distribution: Record<string, { count: number; value: number }>;
+    };
+  }> {
+    return this.request("/steam/stats");
+  }
+
+  // Scraping endpoints - Steam
+  async scrapeSteam(data: {
+    steam_id: string;
+    app_id?: string;
+    include_floats?: boolean;
+    include_prices?: boolean; // NEW: Include pricing data
+    enable_pricing?: boolean; // NEW: Enable pricing service
+    headless?: boolean;
+  }): Promise<{
+    message: string;
+    scraped_items: SteamItem[];
+    skipped_items?: Array<{
+      name: string;
+      asset_id: string;
+      message: string;
+    }>;
+    total_scraped: number;
+    total_skipped: number;
+  }> {
+    // Steam scraping can take a long time with float values, so use a longer timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 minute timeout
+
+    try {
+      const result = await this.request<{
+        message: string;
+        scraped_items: SteamItem[];
+        skipped_items?: Array<{
+          name: string;
+          asset_id: string;
+          message: string;
+        }>;
+        total_scraped: number;
+        total_skipped: number;
+      }>("/scrape/steam", {
+        method: "POST",
+        body: JSON.stringify(data),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      return result;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      throw error;
+    }
   }
 
   async addCustomCard(card: {

@@ -9,6 +9,7 @@ from datetime import datetime
 
 from .base_scraper import BaseScraper, ScraperError
 from .trading_cards_scraper import TradingCardsScraper
+from .steam_inventory_scraper import SteamInventoryScraper
 
 
 class ScraperManager:
@@ -29,9 +30,10 @@ class ScraperManager:
         self.api_keys = api_keys or {}
         self.logger = logging.getLogger(__name__)
         
-        # Initialize only cards scraper
+        # Initialize scrapers
         self.scrapers: Dict[str, BaseScraper] = {
-            'cards': TradingCardsScraper()
+            'cards': TradingCardsScraper(),
+            'steam': SteamInventoryScraper()
         }
         
         self.logger.info("ScraperManager initialized with scrapers: %s", list(self.scrapers.keys()))
@@ -62,11 +64,16 @@ class ScraperManager:
             available = ', '.join(self.scrapers.keys())
             raise ScraperError(f"Invalid scraper type '{scraper_type}'. Available: {available}")
         
-        # Special handling for trading cards scraper to support headless parameter
+        # Special handling for scrapers with custom parameters
         if scraper_type == 'cards' and 'headless' in kwargs:
             from .trading_cards_scraper import TradingCardsScraper
             headless = kwargs.pop('headless')
             scraper = TradingCardsScraper(headless=headless)
+        elif scraper_type == 'steam' and ('headless' in kwargs or 'enable_pricing' in kwargs):
+            from .steam_inventory_scraper import SteamInventoryScraper
+            headless = kwargs.pop('headless', True)
+            enable_pricing = kwargs.pop('enable_pricing', False)
+            scraper = SteamInventoryScraper(headless=headless, enable_pricing=enable_pricing)
         else:
             scraper = self.scrapers[scraper_type]
         
@@ -82,7 +89,8 @@ class ScraperManager:
         
         finally:
             # Clean up dynamically created scrapers
-            if scraper_type == 'cards' and scraper != self.scrapers.get(scraper_type) and hasattr(scraper, '_cleanup'):
+            if ((scraper_type == 'cards' or scraper_type == 'steam') and 
+                scraper != self.scrapers.get(scraper_type) and hasattr(scraper, '_cleanup')):
                 scraper._cleanup()
     
     def scrape_trading_cards(self, expansion: str, number_from: int, number_to: int) -> List[Dict[str, Any]]:

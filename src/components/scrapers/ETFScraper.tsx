@@ -198,9 +198,7 @@ export const ETFScraper: React.FC<ETFScraperProps> = ({
           onClick={handleScrape}
           disabled={isLoading}
           className={`w-full py-3 px-4 rounded-md font-medium transition-colors ${
-            isLoading
-              ? "btn-secondary cursor-not-allowed opacity-50"
-              : "btn-primary"
+            isLoading ? "btn-xl cursor-not-allowed" : "btn-xl"
           }`}
         >
           {isLoading ? (

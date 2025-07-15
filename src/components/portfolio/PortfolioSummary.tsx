@@ -32,8 +32,10 @@ const PortfolioSummaryComponent: React.FC<PortfolioSummaryProps> = ({
   };
 
   // Prepare data for pie chart
-  const pieChartData = Object.entries(summary.asset_breakdown)
-    .filter(([, breakdown]) => breakdown.count > 0)
+  const pieChartData = Object.entries(summary.asset_breakdown || {})
+    .filter(
+      ([, breakdown]) => breakdown && breakdown.count > 0 && breakdown.value > 0
+    )
     .map(([type, breakdown]) => ({
       name: type.charAt(0).toUpperCase() + type.slice(1),
       value: breakdown.value,

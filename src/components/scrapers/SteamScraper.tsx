@@ -12,10 +12,12 @@ export const SteamScraper: React.FC<SteamScraperProps> = ({
   onScrapingComplete,
 }) => {
   const [formData, setFormData] = useState({
-    steamId: "",
-    appId: "",
-    includeFloats: true,
-    priceSource: "csfloat",
+    steamId: "76561198205836117", // Pre-fill with the user's Steam ID
+    appId: "730", // CS2
+    includeFloats: false, // Default to false for faster scraping
+    includePrices: true, // NEW: Enable pricing by default
+    enablePricing: true, // NEW: Enable pricing service
+    headless: true,
   });
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState("");
@@ -44,21 +46,40 @@ export const SteamScraper: React.FC<SteamScraperProps> = ({
 
     try {
       const response = await apiClient.scrapeSteam({
-        steamId: formData.steamId,
-        appId: formData.appId || undefined,
+        steam_id: formData.steamId,
+        app_id: formData.appId || "730",
+        include_floats: formData.includeFloats,
+        include_prices: formData.includePrices, // NEW: Include pricing
+        enable_pricing: formData.enablePricing, // NEW: Enable pricing service
+        headless: true,
       });
 
-      setMessage(
-        `Successfully scraped ${response.scraped_items.length} Steam items!`
-      );
+      // Create detailed success message
+      let successMessage = response.message;
+
+      if (response.skipped_items && response.skipped_items.length > 0) {
+        const skippedNames = response.skipped_items
+          .map((item: any) => item.name)
+          .slice(0, 5); // Show first 5
+        successMessage += `\n\nSkipped existing items: ${skippedNames.join(
+          ", "
+        )}`;
+        if (response.skipped_items.length > 5) {
+          successMessage += ` and ${response.skipped_items.length - 5} more...`;
+        }
+      }
+
+      setMessage(successMessage);
       onScrapingComplete();
 
       // Reset form
       setFormData({
         steamId: "",
-        appId: "",
-        includeFloats: true,
-        priceSource: "csfloat",
+        appId: "730",
+        includeFloats: false,
+        includePrices: true,
+        enablePricing: true,
+        headless: true,
       });
     } catch (err) {
       setError(
@@ -84,7 +105,11 @@ export const SteamScraper: React.FC<SteamScraperProps> = ({
 
       <div className="card-body">
         {/* Status Messages */}
-        {message && <div className="mb-4 alert-success">{message}</div>}
+        {message && (
+          <div className="mb-4 alert-success whitespace-pre-line">
+            {message}
+          </div>
+        )}
 
         {error && <div className="mb-4 alert-error">{error}</div>}
 
@@ -105,10 +130,10 @@ export const SteamScraper: React.FC<SteamScraperProps> = ({
                 value={formData.steamId}
                 onChange={handleInputChange}
                 className="input w-full"
-                placeholder="e.g., 76561198000000000 or steamcommunity.com/id/username"
+                placeholder="e.g., 76561198205836117 or https://steamcommunity.com/profiles/76561198205836117/inventory/"
               />
               <p className="text-xs text-muted mt-1">
-                Enter your Steam ID or profile URL. Your inventory must be
+                Enter your Steam ID or full profile URL. Your inventory must be
                 public.
               </p>
             </div>
@@ -138,27 +163,6 @@ export const SteamScraper: React.FC<SteamScraperProps> = ({
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label
-                htmlFor="priceSource"
-                className="block text-sm font-medium text-secondary mb-1"
-              >
-                Price Data Source
-              </label>
-              <select
-                id="priceSource"
-                name="priceSource"
-                value={formData.priceSource}
-                onChange={handleInputChange}
-                className="select w-full"
-              >
-                <option value="csfloat">CSFloat</option>
-                <option value="steammarket">Steam Community Market</option>
-                <option value="buff163">Buff163</option>
-                <option value="skinport">Skinport</option>
-              </select>
-            </div>
-
             <div className="flex items-center">
               <input
                 type="checkbox"
@@ -172,8 +176,38 @@ export const SteamScraper: React.FC<SteamScraperProps> = ({
                 htmlFor="includeFloats"
                 className="ml-2 block text-sm text-secondary"
               >
-                Include float values and pattern info (CS2 skins)
+                Include Float Values & Pattern Index (MUCH slower - can take 5+
+                minutes for large inventories)
               </label>
+            </div>
+
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                id="includePrices"
+                name="includePrices"
+                checked={formData.includePrices}
+                onChange={handleInputChange}
+                className="h-4 w-4 text-blue focus:ring-blue border-primary bg-tertiary rounded"
+              />
+              <label
+                htmlFor="includePrices"
+                className="ml-2 block text-sm text-secondary"
+              >
+                Include Steam Market Prices (adds ~2-3 seconds per item due to rate limiting)
+              </label>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4">
+            <div>
+              <p className="text-xs text-muted">
+                ⚡ Fast Mode: Name, Rarity, Condition only
+                <br />
+                💰 Price Mode: Adds Steam Community Market pricing (recommended)
+                <br />
+                🐌 Float Mode: Adds Float Values and Pattern Index (requires browser automation)
+              </p>
             </div>
           </div>
         </div>
@@ -182,15 +216,28 @@ export const SteamScraper: React.FC<SteamScraperProps> = ({
         <button
           onClick={handleScrape}
           disabled={isLoading}
-          className={`w-full py-3 px-4 rounded-md font-medium transition-colors ${
-            isLoading
-              ? "btn-secondary cursor-not-allowed opacity-50"
-              : "btn-primary"
+          className={`w-full transition-colors ${
+            isLoading ? "btn-xl cursor-not-allowed" : "btn-xl"
           }`}
         >
           {isLoading ? (
             <div className="flex items-center justify-center gap-2">
-              <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+              <svg
+                aria-hidden="true"
+                className="w-4 h-4 text-gray-200 animate-spin dark:text-gray-600 fill-blue-500"
+                viewBox="0 0 100 101"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M100 50.5908C100 78.2051 77.6142 100.591 50 100.591C22.3858 100.591 0 78.2051 0 50.5908C0 22.9766 22.3858 0.59082 50 0.59082C77.6142 0.59082 100 22.9766 100 50.5908ZM9.08144 50.5908C9.08144 73.1895 27.4013 91.5094 50 91.5094C72.5987 91.5094 90.9186 73.1895 90.9186 50.5908C90.9186 27.9921 72.5987 9.67226 50 9.67226C27.4013 9.67226 9.08144 27.9921 9.08144 50.5908Z"
+                  fill="currentColor"
+                />
+                <path
+                  d="M93.9676 39.0409C96.393 38.4038 97.8624 35.9116 97.0079 33.5539C95.2932 28.8227 92.871 24.3692 89.8167 20.348C85.8452 15.1192 80.8826 10.7238 75.2124 7.41289C69.5422 4.10194 63.2754 1.94025 56.7698 1.05124C51.7666 0.367541 46.6976 0.446843 41.7345 1.27873C39.2613 1.69328 37.813 4.19778 38.4501 6.62326C39.0873 9.04874 41.5694 10.4717 44.0505 10.1071C47.8511 9.54855 51.7191 9.52689 55.5402 10.0491C60.8642 10.7766 65.9928 12.5457 70.6331 15.2552C75.2735 17.9648 79.3347 21.5619 82.5849 25.841C84.9175 28.9121 86.7997 32.2913 88.1811 35.8758C89.083 38.2158 91.5421 39.6781 93.9676 39.0409Z"
+                  fill="currentFill"
+                />
+              </svg>{" "}
               Scraping Steam Inventory...
             </div>
           ) : (
@@ -201,8 +248,9 @@ export const SteamScraper: React.FC<SteamScraperProps> = ({
         <div className="mt-4 text-sm text-muted">
           <p>
             <strong>Note:</strong> Your Steam inventory must be set to public
-            for this to work. Prices will be fetched from your selected source.
-            CS2 items will include float values when available.
+            for this to work. Pricing data is fetched from Steam Community Market
+            with rate limiting (2-3 seconds per item). CS2 items will include 
+            float values when enabled (much slower).
           </p>
         </div>
       </div>

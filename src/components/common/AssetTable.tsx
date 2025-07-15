@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, memo } from "react";
 import type { Asset, AssetType } from "../../types/assets";
 import { apiClient } from "../../api/client";
 
@@ -105,10 +105,12 @@ const AssetTable: React.FC<AssetTableProps> = ({
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
     const { name, value, type } = e.target;
+    const newValue =
+      type === "checkbox" ? (e.target as HTMLInputElement).checked : value;
+
     setAddCardFormData((prev) => ({
       ...prev,
-      [name]:
-        type === "checkbox" ? (e.target as HTMLInputElement).checked : value,
+      [name]: newValue,
     }));
   };
 
@@ -330,14 +332,14 @@ const AssetTable: React.FC<AssetTableProps> = ({
                 <>
                   <button
                     onClick={handleAddNewCard}
-                    className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed"
+                    className="primary-btn btn-green disabled:bg-gray-600 disabled:cursor-not-allowed"
                   >
                     Add New Card
                   </button>
                   <button
                     onClick={handleRescrape}
                     disabled={isRescraping || assets.length === 0}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed"
+                    className="primary-btn disabled:bg-gray-600 disabled:cursor-not-allowed"
                   >
                     {isRescraping ? "Rescaping..." : "Rescrape Prices"}
                   </button>
@@ -346,7 +348,7 @@ const AssetTable: React.FC<AssetTableProps> = ({
               <button
                 onClick={handleDeleteAll}
                 disabled={isDeleting || assets.length === 0}
-                className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-gray-600 disabled:cursor-not-allowed"
+                className="primary-btn btn-red disabled:bg-gray-600 disabled:cursor-not-allowed"
               >
                 {isDeleting ? "Deleting..." : "Delete All"}
               </button>
@@ -355,78 +357,83 @@ const AssetTable: React.FC<AssetTableProps> = ({
         </div>
 
         <div className="card-body">
+          {/* Status messages */}
+          {rescrapeMessage && (
+            <div className="mb-4 p-4 bg-green-800 border border-green-600 text-green-200 rounded">
+              {rescrapeMessage}
+            </div>
+          )}
+          {rescrapeError && (
+            <div className="mb-4 p-4 bg-red-800 border border-red-600 text-red-200 rounded">
+              {rescrapeError}
+            </div>
+          )}
+          {addCardMessage && (
+            <div className="mb-4 p-4 bg-green-800 border border-green-600 text-green-200 rounded">
+              {addCardMessage}
+            </div>
+          )}
+          {addCardError && (
+            <div className="mb-4 p-4 bg-red-800 border border-red-600 text-red-200 rounded">
+              {addCardError}
+            </div>
+          )}
+          {deleteMessage && (
+            <div className="mb-4 p-4 bg-green-800 border border-green-600 text-green-200 rounded">
+              {deleteMessage}
+            </div>
+          )}
+          {deleteError && (
+            <div className="mb-4 p-4 bg-red-800 border border-red-600 text-red-200 rounded">
+              {deleteError}
+            </div>
+          )}
 
-        {/* Status messages */}
-        {rescrapeMessage && (
-          <div className="mb-4 p-4 bg-green-800 border border-green-600 text-green-200 rounded">
-            {rescrapeMessage}
-          </div>
-        )}
-        {rescrapeError && (
-          <div className="mb-4 p-4 bg-red-800 border border-red-600 text-red-200 rounded">
-            {rescrapeError}
-          </div>
-        )}
-        {addCardMessage && (
-          <div className="mb-4 p-4 bg-green-800 border border-green-600 text-green-200 rounded">
-            {addCardMessage}
-          </div>
-        )}
-        {addCardError && (
-          <div className="mb-4 p-4 bg-red-800 border border-red-600 text-red-200 rounded">
-            {addCardError}
-          </div>
-        )}
-        {deleteMessage && (
-          <div className="mb-4 p-4 bg-green-800 border border-green-600 text-green-200 rounded">
-            {deleteMessage}
-          </div>
-        )}
-        {deleteError && (
-          <div className="mb-4 p-4 bg-red-800 border border-red-600 text-red-200 rounded">
-            {deleteError}
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="stats-card">
-            <div className="text-sm font-medium text-secondary">Total Items</div>
-            <div className="text-2xl font-bold text-primary">
-              {getTotalItems()}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="stats-card">
+              <div className="text-sm font-medium text-secondary">
+                Total Items
+              </div>
+              <div className="text-2xl font-bold text-primary">
+                {getTotalItems()}
+              </div>
             </div>
-          </div>
-          <div className="stats-card">
-            <div className="text-sm font-medium text-secondary">Total Value</div>
-            <div className="text-2xl font-bold text-primary">
-              {formatCurrency(getTotalValue())}
+            <div className="stats-card">
+              <div className="text-sm font-medium text-secondary">
+                Total Value
+              </div>
+              <div className="text-2xl font-bold text-primary">
+                {formatCurrency(getTotalValue())}
+              </div>
             </div>
-          </div>
-          <div className="stats-card">
-            <div className="text-sm font-medium text-secondary">
-              Total Investment
+            <div className="stats-card">
+              <div className="text-sm font-medium text-secondary">
+                Total Investment
+              </div>
+              <div className="text-2xl font-bold text-primary">
+                {formatCurrency(getTotalInvestment())}
+              </div>
             </div>
-            <div className="text-2xl font-bold text-primary">
-              {formatCurrency(getTotalInvestment())}
-            </div>
-          </div>
-          <div className="stats-card">
-            <div className="text-sm font-medium text-secondary">Total P&L</div>
-            <div
-              className={`text-2xl font-bold ${getProfitLossColor(
-                getTotalProfitLoss()
-              )}`}
-            >
-              {getProfitLossSymbol(getTotalProfitLoss())}
-              {formatCurrency(Math.abs(getTotalProfitLoss()))}
-              <div className="text-sm font-normal">
-                ({getProfitLossSymbol(getTotalProfitLossPercentage())}
-                {getTotalProfitLossPercentage().toFixed(2)}%)
+            <div className="stats-card">
+              <div className="text-sm font-medium text-secondary">
+                Total P&L
+              </div>
+              <div
+                className={`text-2xl font-bold ${getProfitLossColor(
+                  getTotalProfitLoss()
+                )}`}
+              >
+                {getProfitLossSymbol(getTotalProfitLoss())}
+                {formatCurrency(Math.abs(getTotalProfitLoss()))}
+                <div className="text-sm font-normal">
+                  ({getProfitLossSymbol(getTotalProfitLossPercentage())}
+                  {getTotalProfitLossPercentage().toFixed(2)}%)
+                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
 
       {/* Filter and Table */}
       <div className="card">
@@ -447,192 +454,195 @@ const AssetTable: React.FC<AssetTableProps> = ({
         </div>
 
         <div className="card-body">
-        {sortedAssets.length === 0 ? (
-          <div className="px-6 py-8 text-center text-secondary">
-            {filterText
-              ? `No ${assetType} found matching "${filterText}"`
-              : `No ${assetType} found`}
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-600">
-              <thead className="bg-tertiary">
-                <tr>
-                  <th
-                    className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider cursor-pointer hover:bg-gray-600"
-                    onClick={() => handleSort("name")}
-                  >
-                    Name {getSortIcon("name")}
-                  </th>
-                  {assetType === "cards" && (
+          {sortedAssets.length === 0 ? (
+            <div className="px-6 py-8 text-center text-secondary">
+              {filterText
+                ? `No ${assetType} found matching "${filterText}"`
+                : `No ${assetType} found`}
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-600">
+                <thead className="bg-tertiary">
+                  <tr>
                     <th
                       className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider cursor-pointer hover:bg-gray-600"
-                      onClick={() => handleSort("tcg" as keyof Asset)}
+                      onClick={() => handleSort("name")}
                     >
-                      TCG {getSortIcon("tcg" as keyof Asset)}
+                      Name {getSortIcon("name")}
                     </th>
-                  )}
-                  {assetType === "cards" && (
+                    {assetType === "cards" && (
+                      <th
+                        className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider cursor-pointer hover:bg-gray-600"
+                        onClick={() => handleSort("tcg" as keyof Asset)}
+                      >
+                        TCG {getSortIcon("tcg" as keyof Asset)}
+                      </th>
+                    )}
+                    {assetType === "cards" && (
+                      <th
+                        className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider cursor-pointer hover:bg-gray-600"
+                        onClick={() => handleSort("expansion" as keyof Asset)}
+                      >
+                        Expansion {getSortIcon("expansion" as keyof Asset)}
+                      </th>
+                    )}
+                    {(assetType === "stocks" || assetType === "etfs") && (
+                      <th
+                        className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider cursor-pointer hover:bg-gray-600"
+                        onClick={() => handleSort("symbol" as keyof Asset)}
+                      >
+                        Symbol {getSortIcon("symbol" as keyof Asset)}
+                      </th>
+                    )}
                     <th
                       className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider cursor-pointer hover:bg-gray-600"
-                      onClick={() => handleSort("expansion" as keyof Asset)}
+                      onClick={() => handleSort("quantity")}
                     >
-                      Expansion {getSortIcon("expansion" as keyof Asset)}
+                      Quantity {getSortIcon("quantity")}
                     </th>
-                  )}
-                  {(assetType === "stocks" || assetType === "etfs") && (
                     <th
                       className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider cursor-pointer hover:bg-gray-600"
-                      onClick={() => handleSort("symbol" as keyof Asset)}
+                      onClick={() => handleSort("current_price")}
                     >
-                      Symbol {getSortIcon("symbol" as keyof Asset)}
+                      Current Price {getSortIcon("current_price")}
                     </th>
-                  )}
-                  <th
-                    className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider cursor-pointer hover:bg-gray-600"
-                    onClick={() => handleSort("quantity")}
-                  >
-                    Quantity {getSortIcon("quantity")}
-                  </th>
-                  <th
-                    className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider cursor-pointer hover:bg-gray-600"
-                    onClick={() => handleSort("current_price")}
-                  >
-                    Current Price {getSortIcon("current_price")}
-                  </th>
-                  <th
-                    className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider cursor-pointer hover:bg-gray-600"
-                    onClick={() => handleSort("price_bought")}
-                  >
-                    Buy Price {getSortIcon("price_bought")}
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
-                    Total Value
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
-                    P&L
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-secondary divide-y divide-gray-600">
-                {sortedAssets.map((asset) => {
-                  const totalValue = asset.current_price * asset.quantity;
-                  const totalInvestment = asset.price_bought * asset.quantity;
-                  const profitLoss = totalValue - totalInvestment;
-                  const profitLossPercentage = getProfitLossPercentage(asset);
+                    <th
+                      className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider cursor-pointer hover:bg-gray-600"
+                      onClick={() => handleSort("price_bought")}
+                    >
+                      Buy Price {getSortIcon("price_bought")}
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
+                      Total Value
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
+                      P&L
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-secondary divide-y divide-gray-600">
+                  {sortedAssets.map((asset) => {
+                    const totalValue = asset.current_price * asset.quantity;
+                    const totalInvestment = asset.price_bought * asset.quantity;
+                    const profitLoss = totalValue - totalInvestment;
+                    const profitLossPercentage = getProfitLossPercentage(asset);
 
-                  return (
-                    <tr key={asset.id} className="hover:bg-tertiary">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-primary">
-                          {asset.name}
-                        </div>
-                      </td>
-                      {assetType === "cards" && "tcg" in asset && (
+                    return (
+                      <tr key={asset.id} className="hover:bg-tertiary">
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-secondary">
-                            {asset.tcg}
+                          <div className="text-sm font-medium text-primary">
+                            {asset.name}
                           </div>
                         </td>
-                      )}
-                      {assetType === "cards" && "expansion" in asset && (
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-secondary">
-                            {asset.expansion}
-                          </div>
-                        </td>
-                      )}
-                      {(assetType === "stocks" || assetType === "etfs") &&
-                        "symbol" in asset && (
+                        {assetType === "cards" && "tcg" in asset && (
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm text-secondary">
-                              {asset.symbol}
+                              {asset.tcg}
                             </div>
                           </td>
                         )}
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-secondary">
-                          {asset.quantity}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-secondary">
-                          {formatCurrency(asset.current_price)}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-secondary">
-                          {formatCurrency(asset.price_bought)}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-primary">
-                          {formatCurrency(totalValue)}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div
-                          className={`text-sm font-medium ${getProfitLossColor(
-                            profitLoss
-                          )}`}
-                        >
-                          {getProfitLossSymbol(profitLoss)}
-                          {formatCurrency(Math.abs(profitLoss))}
-                        </div>
-                        <div
-                          className={`text-xs ${getProfitLossColor(
-                            profitLoss
-                          )}`}
-                        >
-                          ({getProfitLossSymbol(profitLossPercentage)}
-                          {profitLossPercentage.toFixed(2)}%)
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm space-x-2">
-                        {onSetBuyPrice && (
-                          <button
-                            onClick={() => {
-                              const buyPrice = prompt(
-                                `Set buy price for ${asset.name}:`,
-                                asset.price_bought.toString()
-                              );
-                              if (
-                                buyPrice !== null &&
-                                !isNaN(parseFloat(buyPrice))
-                              ) {
-                                onSetBuyPrice(asset.id, parseFloat(buyPrice));
-                              }
-                            }}
-                            className="text-green-400 hover:text-green-300 transition-colors"
-                          >
-                            Set Price
-                          </button>
+                        {assetType === "cards" && "expansion" in asset && (
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-secondary">
+                              {asset.expansion}
+                            </div>
+                          </td>
                         )}
-                        <button
-                          onClick={() =>
-                            handleDeleteAsset(asset.id, asset.name)
-                          }
-                          className="text-red-400 hover:text-red-300 transition-colors"
-                        >
-                          Delete
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+                        {(assetType === "stocks" || assetType === "etfs") &&
+                          "symbol" in asset && (
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm text-secondary">
+                                {asset.symbol}
+                              </div>
+                            </td>
+                          )}
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-secondary">
+                            {asset.quantity}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-secondary">
+                            {formatCurrency(asset.current_price)}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-secondary">
+                            {formatCurrency(asset.price_bought)}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm font-medium text-primary">
+                            {formatCurrency(totalValue)}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div
+                            className={`text-sm font-medium ${getProfitLossColor(
+                              profitLoss
+                            )}`}
+                          >
+                            {getProfitLossSymbol(profitLoss)}
+                            {formatCurrency(Math.abs(profitLoss))}
+                          </div>
+                          <div
+                            className={`text-xs ${getProfitLossColor(
+                              profitLoss
+                            )}`}
+                          >
+                            ({getProfitLossSymbol(profitLossPercentage)}
+                            {profitLossPercentage.toFixed(2)}%)
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm space-x-2">
+                          {onSetBuyPrice && (
+                            <button
+                              onClick={() => {
+                                const buyPrice = prompt(
+                                  `Set buy price for ${asset.name}:`,
+                                  asset.price_bought.toString()
+                                );
+                                if (
+                                  buyPrice !== null &&
+                                  !isNaN(parseFloat(buyPrice))
+                                ) {
+                                  onSetBuyPrice(asset.id, parseFloat(buyPrice));
+                                }
+                              }}
+                              className="text-green-400 hover:text-green-300 transition-colors"
+                            >
+                              Set Price
+                            </button>
+                          )}
+                          <button
+                            onClick={() =>
+                              handleDeleteAsset(asset.id, asset.name)
+                            }
+                            className="text-red-400 hover:text-red-300 transition-colors"
+                          >
+                            Delete
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Add Card Modal */}
       {showAddCardModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div
+          key="add-card-modal"
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+        >
           <div className="bg-gray-800 rounded-lg p-6 w-full max-w-md mx-4 border border-gray-600">
             <h3 className="text-lg font-semibold text-white mb-4">
               Add New Cards
@@ -683,6 +693,7 @@ const AssetTable: React.FC<AssetTableProps> = ({
                     placeholder="e.g., Stellar Crown"
                     autoComplete="off"
                     className="w-full border border-gray-600 bg-gray-700 text-white rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400"
+                    key="expansion-input"
                   />
                 </div>
 
@@ -702,6 +713,7 @@ const AssetTable: React.FC<AssetTableProps> = ({
                     placeholder="e.g., 170, 135, 152, 108"
                     autoComplete="off"
                     className="w-full border border-gray-600 bg-gray-700 text-white rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400"
+                    key="numbers-input"
                   />
                   <p className="text-xs text-gray-400 mt-1">
                     Enter card numbers separated by commas. Example: 170, 135,
@@ -747,7 +759,7 @@ const AssetTable: React.FC<AssetTableProps> = ({
                 <button
                   type="submit"
                   disabled={isAddingCard}
-                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed"
+                  className="primary-btn btn-green disabled:bg-gray-600 disabled:cursor-not-allowed"
                 >
                   {isAddingCard ? "Scraping..." : "Add Cards"}
                 </button>
@@ -760,4 +772,4 @@ const AssetTable: React.FC<AssetTableProps> = ({
   );
 };
 
-export default AssetTable;
+export default memo(AssetTable);

@@ -53,13 +53,17 @@ export interface Crypto extends BaseAsset {
 
 // Steam Items
 export interface SteamItem extends BaseAsset {
+  _id?: string;
   type: "steam";
-  item_name: string;
+  name: string;
   game: string;
-  quality: string;
-  exterior?: string;
+  rarity: string;
+  condition?: string;
   float_value?: number;
-  stickers?: string[];
+  asset_id: string;
+  image_url?: string;
+  market_hash_name?: string;
+  steam_id?: string;
 }
 
 // Union type for all assets

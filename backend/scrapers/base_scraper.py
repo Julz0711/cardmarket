@@ -61,7 +61,7 @@ class BaseScraper(ABC):
         Clean and convert price string to float
         
         Args:
-            price_str: Price string (e.g., "€1.23", "$5.67")
+            price_str: Price string (e.g., "€1.23", "$5.67", "46,--€", "1,234.56$")
             
         Returns:
             Float value of the price
@@ -70,7 +70,31 @@ class BaseScraper(ABC):
             return 0.0
             
         # Remove currency symbols and whitespace
-        cleaned = price_str.replace('€', '').replace('$', '').replace(',', '.').strip()
+        cleaned = price_str.replace('€', '').replace('$', '').replace('£', '').replace('¥', '').strip()
+        
+        # Handle special European format like "46,--" (means 46.00)
+        if cleaned.endswith(',--'):
+            cleaned = cleaned.replace(',--', '')
+            try:
+                return float(cleaned)
+            except ValueError:
+                self.logger.warning(f"Could not parse price: {price_str}")
+                return 0.0
+        
+        # Handle European decimal format (comma as decimal separator)
+        # But we need to distinguish between thousands separator and decimal separator
+        if ',' in cleaned and '.' in cleaned:
+            # Format like "1,234.56" - comma is thousands separator
+            cleaned = cleaned.replace(',', '')
+        elif ',' in cleaned and cleaned.count(',') == 1:
+            # Check if comma is likely a decimal separator (2 digits or less after comma)
+            parts = cleaned.split(',')
+            if len(parts) == 2 and len(parts[1]) <= 2:
+                # Format like "46,50" - comma is decimal separator
+                cleaned = cleaned.replace(',', '.')
+            else:
+                # Format like "1,234" - comma is thousands separator
+                cleaned = cleaned.replace(',', '')
         
         try:
             return float(cleaned)
