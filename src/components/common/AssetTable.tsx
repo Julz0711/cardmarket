@@ -339,7 +339,7 @@ const AssetTable: React.FC<AssetTableProps> = ({
               )}
               {assetType === "stocks" && (
                 <button
-                  onClick={() => alert('Add New Stock (not implemented)')}
+                  onClick={() => alert("Add New Stock (not implemented)")}
                   className="primary-btn btn-green disabled:bg-gray-600 disabled:cursor-not-allowed"
                 >
                   Add New Stock
@@ -347,7 +347,7 @@ const AssetTable: React.FC<AssetTableProps> = ({
               )}
               {assetType === "etfs" && (
                 <button
-                  onClick={() => alert('Add New ETF (not implemented)')}
+                  onClick={() => alert("Add New ETF (not implemented)")}
                   className="primary-btn btn-green disabled:bg-gray-600 disabled:cursor-not-allowed"
                 >
                   Add New ETF
@@ -355,7 +355,7 @@ const AssetTable: React.FC<AssetTableProps> = ({
               )}
               {assetType === "crypto" && (
                 <button
-                  onClick={() => alert('Add New Crypto (not implemented)')}
+                  onClick={() => alert("Add New Crypto (not implemented)")}
                   className="primary-btn btn-green disabled:bg-gray-600 disabled:cursor-not-allowed"
                 >
                   Add New Crypto

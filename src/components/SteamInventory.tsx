@@ -328,7 +328,7 @@ export const SteamInventory: React.FC = () => {
               Steam Inventory Summary
             </h2>
             <button
-              onClick={() => alert('Add Profile (Steam import)')}
+              onClick={() => alert("Add Profile (Steam import)")}
               className="primary-btn btn-green ml-4"
             >
               Add Profile

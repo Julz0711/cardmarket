@@ -279,18 +279,17 @@ class SkinSnipeScraper:
             name_lc.startswith('stat-trak') or
             name_lc.startswith('stattrak™')
         )
-        # Try to match with and without whitespace, and fallback to flexible matching
         if is_stattrak:
-            # Try exact, then case-insensitive, then ignore whitespace
+            # Always use StatTrak mapping for StatTrak items
             variant_text = self.stattrak_mapping.get(condition, None)
             if not variant_text:
-                # Try to match ignoring whitespace
+                # Try to match ignoring whitespace/case
                 for k, v in self.stattrak_mapping.items():
                     if k.replace(' ', '').lower() == condition.replace(' ', '').lower():
                         variant_text = v
                         break
             if not variant_text:
-                variant_text = condition
+                variant_text = f"ST {condition}"  # Fallback
         else:
             variant_text = self.condition_mapping.get(condition, None)
             if not variant_text:
@@ -712,106 +711,61 @@ class SkinSnipeScraper:
                     except:
                         logger.debug(f"  Variant {i+1}: [Could not get text]")
                 
-                # First try: exact match
+                # Try to match variant links robustly: exact, case-insensitive, ignore whitespace, and with/without 'ST ' prefix
+                def normalize(text):
+                    return text.replace(' ', '').replace('™', '').replace('-', '').upper()
+
+                norm_expected = normalize(expected_variant)
+                candidates = []
                 for i, link in enumerate(variant_links):
                     try:
                         variant_text = link.text.strip()
-                        
-                        if variant_text == expected_variant:
-                            logger.info(f"Found EXACT match: '{variant_text}' == '{expected_variant}'")
-                            
-                            # Scroll to and click the variant
-                            self.driver.execute_script("arguments[0].scrollIntoView(true);", link)
-                            time.sleep(0.5)
-                            
-                            try:
-                                link.click()
-                                logger.info(f"✅ Successfully clicked exact variant: '{variant_text}'")
-                                time.sleep(2)  # Wait for page to update
-                                return True
-                            except Exception as click_e:
-                                logger.debug(f"Regular click failed, trying JavaScript: {click_e}")
-                                self.driver.execute_script("arguments[0].click();", link)
-                                logger.info(f"✅ Successfully clicked exact variant with JS: '{variant_text}'")
-                                time.sleep(1.5)  # Wait for page to update
-                                return True
-                            
+                        norm_variant = normalize(variant_text)
+                        candidates.append((i, link, variant_text, norm_variant))
                     except Exception as e:
-                        logger.debug(f"Error processing exact match variant {i+1}: {e}")
+                        logger.debug(f"Error processing variant {i+1}: {e}")
                         continue
-                
-                # Second try: case-insensitive match
-                logger.debug(f"No exact match found, trying case-insensitive match for '{expected_variant}'")
-                
-                for i, link in enumerate(variant_links):
-                    try:
-                        variant_text = link.text.strip()
-                        
-                        if variant_text.upper() == expected_variant.upper():
-                            logger.info(f"Found CASE-INSENSITIVE match: '{variant_text}' ~= '{expected_variant}'")
-                            
-                            # Scroll to and click the variant
-                            self.driver.execute_script("arguments[0].scrollIntoView(true);", link)
-                            time.sleep(0.5)
-                            
-                            try:
-                                link.click()
-                                logger.info(f"✅ Successfully clicked case-insensitive variant: '{variant_text}'")
-                                time.sleep(2)
-                                return True
-                            except Exception as click_e:
-                                logger.debug(f"Regular click failed, trying JavaScript: {click_e}")
-                                self.driver.execute_script("arguments[0].click();", link)
-                                logger.info(f"✅ Successfully clicked case-insensitive variant with JS: '{variant_text}'")
-                                time.sleep(1.5)
-                                return True
-                            
-                    except Exception as e:
-                        logger.debug(f"Error processing case-insensitive variant {i+1}: {e}")
-                        continue
-                
-                # Third try: partial/contains match
-                logger.debug(f"No case-insensitive match found, trying partial match for '{expected_variant}'")
-                
-                for i, link in enumerate(variant_links):
-                    try:
-                        variant_text = link.text.strip()
-                        variant_upper = variant_text.upper()
-                        expected_upper = expected_variant.upper()
-                        
-                        # Check if expected variant is contained in the variant text or vice versa
-                        if expected_upper in variant_upper or variant_upper in expected_upper:
-                            logger.info(f"Found PARTIAL match: '{variant_text}' contains/in '{expected_variant}'")
-                            
-                            # Scroll to and click the variant
-                            self.driver.execute_script("arguments[0].scrollIntoView(true);", link)
-                            time.sleep(0.5)
-                            
-                            try:
-                                link.click()
-                                logger.info(f"✅ Successfully clicked partial variant: '{variant_text}'")
-                                time.sleep(2)
-                                return True
-                            except Exception as click_e:
-                                logger.debug(f"Regular click failed, trying JavaScript: {click_e}")
-                                self.driver.execute_script("arguments[0].click();", link)
-                                logger.info(f"✅ Successfully clicked partial variant with JS: '{variant_text}'")
-                                time.sleep(1.5)
-                                return True
-                            
-                    except Exception as e:
-                        logger.debug(f"Error processing partial variant {i+1}: {e}")
-                        continue
-                
+
+                # 1. Exact normalized match
+                for i, link, variant_text, norm_variant in candidates:
+                    if norm_variant == norm_expected:
+                        logger.info(f"Found EXACT normalized match: '{variant_text}' == '{expected_variant}'")
+                        self.driver.execute_script("arguments[0].scrollIntoView(true);", link)
+                        time.sleep(0.5)
+                        try:
+                            link.click()
+                            logger.info(f"✅ Successfully clicked exact variant: '{variant_text}'")
+                            time.sleep(2)
+                            return True
+                        except Exception as click_e:
+                            logger.debug(f"Regular click failed, trying JavaScript: {click_e}")
+                            self.driver.execute_script("arguments[0].click();", link)
+                            logger.info(f"✅ Successfully clicked exact variant with JS: '{variant_text}'")
+                            time.sleep(1.5)
+                            return True
+
+                # 2. Partial normalized match
+                for i, link, variant_text, norm_variant in candidates:
+                    if norm_expected in norm_variant or norm_variant in norm_expected:
+                        logger.info(f"Found PARTIAL normalized match: '{variant_text}' ~ '{expected_variant}'")
+                        self.driver.execute_script("arguments[0].scrollIntoView(true);", link)
+                        time.sleep(0.5)
+                        try:
+                            link.click()
+                            logger.info(f"✅ Successfully clicked partial variant: '{variant_text}'")
+                            time.sleep(2)
+                            return True
+                        except Exception as click_e:
+                            logger.debug(f"Regular click failed, trying JavaScript: {click_e}")
+                            self.driver.execute_script("arguments[0].click();", link)
+                            logger.info(f"✅ Successfully clicked partial variant with JS: '{variant_text}'")
+                            time.sleep(1.5)
+                            return True
+
                 logger.warning(f"❌ No matching variant found for condition: '{condition}' (expected: '{expected_variant}')")
                 logger.warning("Available variants were:")
-                for i, link in enumerate(variant_links):
-                    try:
-                        variant_text = link.text.strip()
-                        logger.warning(f"  - '{variant_text}'")
-                    except:
-                        logger.warning(f"  - [Variant {i+1}: Could not get text]")
-                
+                for i, link, variant_text, _ in candidates:
+                    logger.warning(f"  - '{variant_text}'")
                 return False
                 
             except NoSuchElementException:

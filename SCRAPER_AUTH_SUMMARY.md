@@ -9,7 +9,7 @@ All scraper-related endpoints in the CardMarket backend now require user authent
 ✅ **Added `@auth_required` decorator to:**
 
 1. `/api/scrapers/status` - Get scraper status information
-2. `/api/scrapers/available` - Get list of available scrapers  
+2. `/api/scrapers/available` - Get list of available scrapers
 3. `/api/cards/<card_id>/buy-price` - Update card buy price
 4. `/api/cards/<card_id>` - Update card data
 
@@ -27,12 +27,14 @@ All scraper-related endpoints in the CardMarket backend now require user authent
 ## Security Benefits
 
 🔒 **Full Protection:** Non-logged-in users can no longer:
+
 - View scraper status or availability
 - Trigger any scraping operations
 - Update card or Steam item prices
 - Access any price-related functionality
 
 🛡️ **Authentication Required:** All scraper functionality now requires:
+
 - Valid user account and login
 - JWT token in Authorization header
 - Active authentication session
@@ -54,6 +56,7 @@ All scraper-related endpoints in the CardMarket backend now require user authent
 ## Performance Impact
 
 ⚡ **CSGOSkins.gg Optimizations:** Recent performance improvements should provide:
+
 - ~2.5 seconds average per item (down from 1+ minutes)
 - Reduced delays and aggressive timeouts
 - Better handling of verification challenges
