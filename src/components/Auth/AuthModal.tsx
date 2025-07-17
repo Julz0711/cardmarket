@@ -3,6 +3,7 @@
  */
 import { useState } from "react";
 import { LoginForm, RegisterForm } from "./AuthForms";
+import CloseIcon from "@mui/icons-material/Close";
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -28,9 +29,9 @@ export const AuthModal = ({
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-200 text-2xl font-light"
+            className="primary-btn btn-black flex items-center justify-center text-gray-400 w-8 h-8 hover:text-gray-200 font-light"
           >
-            x
+            <CloseIcon className="p-1" />
           </button>
         </div>
 

@@ -7,8 +7,8 @@ from dotenv import load_dotenv
 
 # Import the new modular scrapers
 from scrapers import ScraperManager, ScraperError, ValidationError
-# Import the CSGOSkins.gg scraper
-from scrapers.csgoskins_scraper import CSGOSkinsGGScraper
+# Import the SkinSnipe.com scraper
+from scrapers.skinsnipe_scraper import SkinSnipeScraper
 
 # Import MongoDB database models
 from database import mongodb, card_model, steam_item_model
@@ -60,9 +60,9 @@ def after_request(response):
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Initialize scraper manager without CSFloat dependency
+# Initialize scraper manager
 api_keys = {
-    # Removed CSFloat dependency - using alternative services instead
+    # Using CSGOSkins.gg and other services for pricing
 }
 scraper_manager = ScraperManager(api_keys=api_keys)
 
@@ -80,6 +80,7 @@ def mongodb_required():
 
 # API Routes
 @app.route('/api/scrapers/status', methods=['GET'])
+@auth_required  # ADDED: Require authentication for scraper status
 def get_scrapers_status():
     """Get status of all available scrapers"""
     try:
@@ -98,6 +99,7 @@ def get_scrapers_status():
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 @app.route('/api/scrapers/available', methods=['GET'])
+@auth_required  # ADDED: Require authentication for available scrapers
 def get_available_scrapers():
     """Get list of available scraper types"""
     try:
@@ -111,7 +113,7 @@ def get_available_scrapers():
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 @app.route('/api/scrape/cards', methods=['POST'])
-@auth_required
+@auth_required  # ADDED: Require authentication for card scraping
 def scrape_trading_cards():
     """Scrape trading cards from CardMarket"""
     try:
@@ -290,6 +292,7 @@ def get_card(card_id):
         return jsonify({'error': 'Failed to get card'}), 500
 
 @app.route('/api/cards/<card_id>/buy-price', methods=['PUT'])
+@auth_required  # ADDED: Require authentication for price updates
 def update_card_buy_price(card_id):
     """Update only the buy price of a specific card"""
     try:
@@ -324,6 +327,7 @@ def update_card_buy_price(card_id):
         return jsonify({'error': str(e)}), 400
 
 @app.route('/api/cards/<card_id>', methods=['PUT'])
+@auth_required  # ADDED: Require authentication for card updates
 def update_card(card_id):
     """Update an existing card"""
     try:
@@ -787,7 +791,7 @@ def scrape_single_card():
         }), 500
 
 @app.route('/api/scrape/steam', methods=['POST'])
-@auth_required
+@auth_required  # ADDED: Require authentication for Steam scraping
 def scrape_steam_inventory():
     """Scrape Steam CS2 inventory from Steam profile"""
     try:
@@ -1256,7 +1260,7 @@ def get_all_users():
 @app.route('/api/steam/update-prices', methods=['POST'])
 @auth_required
 def update_steam_prices():
-    """Update Steam item prices using CSFloat market data"""
+    """Update Steam item prices using SkinSnipe.com market data"""
     try:
         data = request.get_json()
         user_id = request.current_user['user_id']
@@ -1264,6 +1268,12 @@ def update_steam_prices():
         # Get parameters
         item_ids = data.get('item_ids', [])  # Specific items to update, empty means all
         headless = data.get('headless', True)
+        
+        # Override headless mode with environment variable for debugging
+        debug_mode = os.getenv('SCRAPER_DEBUG_MODE', 'false').lower() == 'true'
+        if debug_mode:
+            headless = False
+            logger.info("🔍 SCRAPER DEBUG MODE enabled - browser will be visible")
         
         # Get Steam items for the user
         if item_ids:
@@ -1286,18 +1296,18 @@ def update_steam_prices():
         
         logger.info(f"Starting price update for {len(items)} Steam items")
         
-        # Initialize CSGOSkins.gg scraper
-        scraper = CSGOSkinsGGScraper(headless=headless)
+        # Initialize SkinSnipe.com scraper
+        scraper = SkinSnipeScraper(headless=headless)
         
         updated_items = []
         failed_items = []
         skipped_items = []
         
-        # Prepare items data for CSGOSkins.gg scraper
+        # Prepare items data for SkinSnipe.com scraper
         items_for_pricing = []
         for item in items:
-            # Extract condition from item name or use stored condition
-            condition = item.get('condition') or scraper.extract_condition_from_name(item['name'])
+            # Use the stored condition directly (SkinSnipe handles conditions via variants)
+            condition = item.get('condition')
             
             items_for_pricing.append({
                 'item_id': str(item['_id']),
@@ -1305,51 +1315,68 @@ def update_steam_prices():
                 'condition': condition
             })
         
-        # Scrape prices from CSGOSkins.gg
+        # Scrape prices from SkinSnipe.com
         price_results = scraper.scrape_item_prices(items_for_pricing)
         
-        # Create a mapping of item names to prices
-        price_map = {}
+        # Create a mapping of item IDs to results for easier lookup
+        result_map = {}
         for result in price_results:
-            key = f"{result['item_name']}_{result.get('condition', '')}"
-            price_map[key] = result['price']
+            # Find the corresponding item_id from the original items_for_pricing
+            for pricing_item in items_for_pricing:
+                if (pricing_item['name'] == result['item_name'] and 
+                    pricing_item.get('condition') == result.get('condition')):
+                    result_map[pricing_item['item_id']] = result
+                    break
         
         # Update items with new prices
         for item in items:
             try:
                 item_id = str(item['_id'])
-                condition = item.get('condition') or scraper.extract_condition_from_name(item['name'])
-                clean_name = scraper.clean_item_name(item['name'])
                 
-                # Look for price in results
-                price_key = f"{clean_name}_{condition or ''}"
-                
-                if price_key in price_map:
-                    # Convert USD to EUR (approximate conversion, you might want to use a real exchange rate API)
-                    usd_price = price_map[price_key]
-                    eur_price = usd_price * 0.85  # Rough USD to EUR conversion
+                # Look for result in mapping
+                if item_id in result_map:
+                    result = result_map[item_id]
                     
-                    # Update item in database
-                    update_result = steam_item_model.update_item(item_id, {
-                        'current_price': eur_price,
-                        'price_source': 'csgoskins.gg',
-                        'last_updated': datetime.now().isoformat()
-                    })
-                    
-                    if update_result:
-                        item['current_price'] = eur_price
-                        item['price_source'] = 'csfloat.com'
-                        updated_items.append(item)
-                        logger.info(f"Updated price for {item['name']}: €{eur_price:.2f}")
-                    else:
-                        failed_items.append({
+                    # Check if item was skipped (non-tradeable)
+                    if result.get('skipped', False):
+                        skipped_items.append({
                             'name': item['name'],
-                            'error': 'Database update failed'
+                            'reason': result.get('error', 'Item skipped (non-tradeable)')
+                        })
+                        continue
+                    
+                    # SkinSnipe.com provides USD prices, convert to EUR if needed
+                    usd_price = result['price']
+                    if usd_price > 0:
+                        # For now, assuming 1 USD = 0.85 EUR (you should use a real conversion API)
+                        eur_price = usd_price * 0.85
+                        
+                        # Update item in database
+                        update_result = steam_item_model.update_item(item_id, {
+                            'current_price': eur_price,
+                            'price_source': 'skinsnipe.com',
+                            'last_updated': datetime.now().isoformat()
+                        })
+                        
+                        if update_result:
+                            item['current_price'] = eur_price
+                            item['price_source'] = 'skinsnipe.com'
+                            updated_items.append(item)
+                            logger.info(f"Updated price for {item['name']}: €{eur_price:.2f} (${usd_price:.2f})")
+                        else:
+                            failed_items.append({
+                                'name': item['name'],
+                                'error': 'Database update failed'
+                            })
+                    else:
+                        skipped_items.append({
+                            'name': item['name'],
+                            'reason': 'No price found on SkinSnipe.com'
                         })
                 else:
                     skipped_items.append({
                         'name': item['name'],
-                        'reason': 'No price found on CSFloat'
+                        'reason': 'No price data returned from SkinSnipe.com'
                     })
                     
             except Exception as e:
@@ -1389,6 +1416,61 @@ def update_steam_prices():
             'status': 'error',
             'message': f'Failed to update Steam prices: {str(e)}'
         }), 500
+
+@app.route('/api/scrape/bulk-parallel', methods=['POST'])
+@auth_required  # Require authentication for bulk parallel scraping
+def bulk_parallel_scrape():
+    """Bulk parallel scraping with multiple instances for CSGOSkins items"""
+    try:
+        data = request.get_json()
+        items = data.get('items', [])
+        
+        if not items:
+            return jsonify({'error': 'No items provided'}), 400
+        
+        if len(items) > 20:  # Limit bulk requests
+            return jsonify({'error': 'Maximum 20 items per bulk request'}), 400
+        
+        logger.info(f"Starting bulk parallel scrape for {len(items)} items")
+        
+        # Import the working scraper
+        from parallel_scraper import ParallelCSGOSkinsScraper
+        
+        # Use 3 instances for bulk operations
+        parallel_scraper = ParallelCSGOSkinsScraper(num_instances=3)
+        
+        try:
+            results = parallel_scraper.scrape_parallel(items)
+            
+            # Format results for API response
+            formatted_results = []
+            for result in results:
+                if result and 'price' in result:
+                    formatted_results.append({
+                        'name': result['name'],
+                        'price': result['price'],
+                        'source': result.get('source', 'csgoskins.gg'),
+                        'timestamp': datetime.now().isoformat(),
+                        'instance_id': result.get('instance_id')
+                    })
+            
+            success_rate = len(formatted_results) / len(items) * 100 if items else 0
+            
+            return jsonify({
+                'status': 'success',
+                'results': formatted_results,
+                'total_items': len(items),
+                'successful_items': len(formatted_results),
+                'success_rate': round(success_rate, 1),
+                'message': f'Bulk parallel scraping completed: {len(formatted_results)}/{len(items)} items'
+            })
+                
+        finally:
+            parallel_scraper.cleanup()
+        
+    except Exception as e:
+        logger.error(f"Bulk parallel scrape error: {str(e)}")
+        return jsonify({'error': f'Bulk scraping failed: {str(e)}'}), 500
 
 if __name__ == '__main__':
     logger.info("Starting Portfolio Manager API...")

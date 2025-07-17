@@ -328,22 +328,48 @@ const AssetTable: React.FC<AssetTableProps> = ({
               {assetType.charAt(0).toUpperCase() + assetType.slice(1)} Summary
             </h3>
             <div className="flex space-x-3">
+              {/* Add New button for each asset type */}
               {assetType === "cards" && (
-                <>
-                  <button
-                    onClick={handleAddNewCard}
-                    className="primary-btn btn-green disabled:bg-gray-600 disabled:cursor-not-allowed"
-                  >
-                    Add New Card
-                  </button>
-                  <button
-                    onClick={handleRescrape}
-                    disabled={isRescraping || assets.length === 0}
-                    className="primary-btn disabled:bg-gray-600 disabled:cursor-not-allowed"
-                  >
-                    {isRescraping ? "Rescaping..." : "Rescrape Prices"}
-                  </button>
-                </>
+                <button
+                  onClick={handleAddNewCard}
+                  className="primary-btn btn-green disabled:bg-gray-600 disabled:cursor-not-allowed"
+                >
+                  Add New Card
+                </button>
+              )}
+              {assetType === "stocks" && (
+                <button
+                  onClick={() => alert('Add New Stock (not implemented)')}
+                  className="primary-btn btn-green disabled:bg-gray-600 disabled:cursor-not-allowed"
+                >
+                  Add New Stock
+                </button>
+              )}
+              {assetType === "etfs" && (
+                <button
+                  onClick={() => alert('Add New ETF (not implemented)')}
+                  className="primary-btn btn-green disabled:bg-gray-600 disabled:cursor-not-allowed"
+                >
+                  Add New ETF
+                </button>
+              )}
+              {assetType === "crypto" && (
+                <button
+                  onClick={() => alert('Add New Crypto (not implemented)')}
+                  className="primary-btn btn-green disabled:bg-gray-600 disabled:cursor-not-allowed"
+                >
+                  Add New Crypto
+                </button>
+              )}
+              {/* Rescrape/refresh and delete all remain for all types */}
+              {assetType === "cards" && (
+                <button
+                  onClick={handleRescrape}
+                  disabled={isRescraping || assets.length === 0}
+                  className="primary-btn disabled:bg-gray-600 disabled:cursor-not-allowed"
+                >
+                  {isRescraping ? "Rescraping..." : "Rescrape Prices"}
+                </button>
               )}
               <button
                 onClick={handleDeleteAll}

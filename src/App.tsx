@@ -21,7 +21,6 @@ import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import AccountBalanceIcon from "@mui/icons-material/AccountBalance";
 import CurrencyBitcoinIcon from "@mui/icons-material/CurrencyBitcoin";
 import SportsEsportsIcon from "@mui/icons-material/SportsEsports";
-import PeopleIcon from "@mui/icons-material/People";
 
 function App() {
   const [portfolioSummary, setPortfolioSummary] =

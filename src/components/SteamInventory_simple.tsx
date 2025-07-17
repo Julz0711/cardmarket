@@ -226,7 +226,7 @@ export const SteamInventory: React.FC = () => {
                 Unique Items
               </div>
               <div className="text-2xl font-bold text-primary">
-                {new Set(filteredItems.map(item => item.name)).size}
+                {new Set(filteredItems.map((item) => item.name)).size}
               </div>
             </div>
           </div>
