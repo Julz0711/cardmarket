@@ -22,14 +22,12 @@ from auth import user_model, auth_required, optional_auth, JWTManager
 load_dotenv()
 
 # Flask app configuration
+
 app = Flask(__name__)
 
-# Remove Flask-CORS and handle CORS manually
-# CORS(app, 
-#      origins=os.getenv('CORS_ORIGINS', 'http://localhost:5173,http://localhost:5174').split(','),
-#      allow_headers=['Content-Type', 'content-type', 'Authorization', 'authorization', 'Accept', 'accept', 'X-Requested-With'],
-#      methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-#      supports_credentials=True)
+# Allowed origins for CORS
+ALLOWED_ORIGINS = os.getenv('CORS_ORIGINS', 'http://localhost:5173,http://localhost:5174').split(',')
+
 
 # Request logging middleware
 @app.before_request
@@ -43,7 +41,9 @@ def log_request_info():
 def handle_preflight():
     if request.method == "OPTIONS":
         response = Response()
-        response.headers.add("Access-Control-Allow-Origin", "*")
+        origin = request.headers.get('Origin')
+        if origin and origin in ALLOWED_ORIGINS:
+            response.headers.add("Access-Control-Allow-Origin", origin)
         response.headers.add('Access-Control-Allow-Headers', "Content-Type,Authorization,Accept,X-Requested-With")
         response.headers.add('Access-Control-Allow-Methods', "GET,PUT,POST,DELETE,OPTIONS")
         response.headers.add('Access-Control-Allow-Credentials', 'true')
@@ -52,10 +52,12 @@ def handle_preflight():
 # Add CORS headers to all responses
 @app.after_request
 def after_request(response):
-    response.headers.add('Access-Control-Allow-Origin', '*')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,Accept,X-Requested-With')
-    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
-    response.headers.add('Access-Control-Allow-Credentials', 'true')
+    origin = request.headers.get('Origin')
+    if origin and origin in ALLOWED_ORIGINS:
+        response.headers['Access-Control-Allow-Origin'] = origin
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,Accept,X-Requested-With'
+    response.headers['Access-Control-Allow-Methods'] = 'GET,PUT,POST,DELETE,OPTIONS'
+    response.headers['Access-Control-Allow-Credentials'] = 'true'
     return response
 
 # Logging configuration
