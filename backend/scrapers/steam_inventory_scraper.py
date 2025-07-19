@@ -17,6 +17,7 @@ Usage:
 from typing import List, Dict, Any, Optional
 import requests
 import json
+from skinsearch_scraper import SkinSearchScraper
 import time
 import re
 from selenium import webdriver
@@ -91,6 +92,7 @@ class SteamInventoryScraper(BaseScraper):
         
         steam_id = kwargs.get('steam_id')
         app_id = kwargs.get('app_id', '730')  # Default to CS2
+        user_id = kwargs.get('user_id')  # Optional user_id for association
         
         if not steam_id or not isinstance(steam_id, str):
             raise ValidationError("Steam ID must be a non-empty string")
@@ -98,6 +100,12 @@ class SteamInventoryScraper(BaseScraper):
         # Validate Steam ID format (basic check)
         if not steam_id.isdigit() and not steam_id.startswith('STEAM_') and not steam_id.startswith('http'):
             raise ValidationError("Invalid Steam ID format")
+        
+        # Log user association info
+        if user_id:
+            self.logger.info(f"Steam scraping will associate items with user_id: {user_id}")
+        else:
+            self.logger.warning("No user_id provided - items will not be associated with a specific user")
         
         return True
     
@@ -109,6 +117,7 @@ class SteamInventoryScraper(BaseScraper):
             steam_id (str): Steam ID or profile URL (e.g., '76561198205836117' or full URL)
             app_id (str): Steam App ID (default: 730 for CS2)
             include_floats (bool): Whether to fetch float values (requires web scraping)
+            user_id (str): User ID to associate items with (required for proper user binding)
             
         Returns:
             List of Steam item dictionaries with CS2-specific data
@@ -119,8 +128,10 @@ class SteamInventoryScraper(BaseScraper):
         steam_id = kwargs['steam_id']
         app_id = kwargs.get('app_id', '730')  # Default to CS2
         include_floats = kwargs.get('include_floats', True)
+        user_id = kwargs.get('user_id')  # Extract user_id parameter
         
         items = []
+        skinsearch = SkinSearchScraper()
         
         try:
             # Extract Steam ID from URL if provided
@@ -138,8 +149,24 @@ class SteamInventoryScraper(BaseScraper):
                     
                     # Only process CS2 items
                     if self._is_cs2_item(item_data):
-                        item = self._process_cs2_item(item_data, steam_id, include_floats)
+                        item = self._process_cs2_item(item_data, steam_id, include_floats, user_id)
                         if item:
+                            # Fetch price info from SkinSearchScraper
+                            price_result = skinsearch.scrape_steam_item(item)
+                            if price_result and isinstance(price_result, dict):
+                                if price_result.get('success') and price_result.get('cheapest_price'):
+                                    item['current_price'] = price_result['cheapest_price']['price']
+                                    item['price_currency'] = price_result['cheapest_price']['currency']
+                                    item['price_details'] = price_result['prices']
+                                    item['skinsearch_url'] = price_result.get('url')
+                                else:
+                                    item['current_price'] = 0
+                                    item['price_details'] = []
+                                    item['skinsearch_url'] = price_result.get('url') if price_result.get('url') else None
+                            else:
+                                item['current_price'] = 0
+                                item['price_details'] = []
+                                item['skinsearch_url'] = None
                             items.append(item)
                             self.logger.info(f"Processed item {i+1}/{len(inventory_data)}: {item.get('name', 'Unknown')} (Category: {item.get('item_category', 'unknown')})")
                         else:
@@ -287,7 +314,7 @@ class SteamInventoryScraper(BaseScraper):
         # Default to including items if we're unsure (better to include too many than miss items)
         return True
     
-    def _process_cs2_item(self, item_data: Dict, steam_id: str, include_floats: bool = True) -> Optional[Dict[str, Any]]:
+    def _process_cs2_item(self, item_data: Dict, steam_id: str, include_floats: bool = True, user_id: str = None) -> Optional[Dict[str, Any]]:
         """Process a single CS2 inventory item without pricing"""
         try:
             # Extract basic item info
@@ -326,6 +353,7 @@ class SteamInventoryScraper(BaseScraper):
                 'item_category': item_category,
                 'item_type': item_type,
                 'steam_id': steam_id,
+                'user_id': user_id,  # Add user_id to the scraped item
                 'last_updated': self.format_timestamp()
             }
             

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { apiClient } from "../api/client";
+import { useAuth } from "../contexts/AuthContext";
 import type { SteamItem } from "../types/assets";
 
 // Material Icons
@@ -12,6 +13,7 @@ import SaveIcon from "@mui/icons-material/Save";
 import CancelIcon from "@mui/icons-material/Cancel";
 
 export const SteamInventory: React.FC = () => {
+  const { isAuthenticated } = useAuth();
   const [items, setItems] = useState<SteamItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -23,6 +25,12 @@ export const SteamInventory: React.FC = () => {
   const [editingItem, setEditingItem] = useState<string | null>(null);
   const [editPrice, setEditPrice] = useState("");
 
+  // Add Profile states
+  const [addingProfile, setAddingProfile] = useState(false);
+  const [addProfileNote, setAddProfileNote] = useState("");
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [steamIdInput, setSteamIdInput] = useState("");
+
   // Filter states
   const [nameFilter, setNameFilter] = useState("");
   const [rarityFilter, setRarityFilter] = useState("");
@@ -30,22 +38,74 @@ export const SteamInventory: React.FC = () => {
   const [maxPrice, setMaxPrice] = useState("");
 
   // Sort states
-  const [sortBy, setSortBy] = useState<"name" | "rarity" | "price" | "profit">(
-    "name"
-  );
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
+  // Default: sort by current price, descending (high to low)
+  const [sortBy, setSortBy] = useState<"name" | "rarity" | "price" | "profit">("price");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
   useEffect(() => {
-    loadSteamItems();
-  }, []);
+    // Only load Steam items if user is authenticated
+    if (isAuthenticated) {
+      loadSteamItems();
+    } else {
+      // Clear items if not authenticated
+      setItems([]);
+      setLoading(false);
+    }
+  }, [isAuthenticated]); // Re-run when authentication status changes
+
+  // Add Profile handler (uses modal input)
+  const handleAddProfile = async () => {
+    setShowImportModal(true);
+  };
+
+  const handleImportConfirm = async () => {
+    setAddingProfile(true);
+    setAddProfileNote("Importing Steam inventory and scraping prices. This may take a minute...");
+    setError("");
+    setShowImportModal(false);
+    try {
+      // Use the correct scraping endpoint that saves to database
+      const scrapeResponse = await apiClient.scrapeSteam({
+        steam_id: steamIdInput,
+        headless: true,
+        include_floats: true
+      });
+      
+      // Reload items from database to get the saved items
+      await loadSteamItems();
+      
+      // Handle response format from backend
+      const totalScraped = scrapeResponse.data.total_scraped;
+      setAddProfileNote(`Successfully imported ${totalScraped} Steam items.`);
+      
+    } catch (err) {
+      setError("Failed to import Steam inventory");
+      setAddProfileNote("");
+      console.error(err);
+    } finally {
+      setAddingProfile(false);
+      setSteamIdInput("");
+    }
+  };
 
   const loadSteamItems = async () => {
+    if (!isAuthenticated) {
+      setError("Please log in to view your Steam inventory");
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
+      setError(""); // Clear any previous errors
       const response = await apiClient.getSteamItems(1, 1000);
       setItems(response.items || []);
-    } catch (err) {
-      setError("Failed to load Steam inventory");
+    } catch (err: any) {
+      if (err?.message?.includes('401') || err?.status === 401) {
+        setError("Authentication required. Please log in to view your Steam inventory.");
+      } else {
+        setError("Failed to load Steam inventory");
+      }
       console.error(err);
     } finally {
       setLoading(false);
@@ -131,10 +191,15 @@ export const SteamInventory: React.FC = () => {
         );
       }
 
-      // Show success message
+      // Show success or warning message
+      if (response.status === "warning" || response.details.updated.length === 0) {
+        setError("No prices could be updated. SkinSearch may be down or blocking requests.");
+      } else {
+        setError("");
+      }
       console.log(`Price update completed: ${response.message}`);
     } catch (err) {
-      setError("Failed to update prices from CSFloat");
+      setError("Failed to update prices from SkinSearch");
       console.error(err);
     } finally {
       setUpdatingPrices(false);
@@ -315,6 +380,33 @@ export const SteamInventory: React.FC = () => {
     );
   }
 
+  // Show authentication message if not logged in
+  if (!isAuthenticated) {
+    return (
+      <div className="space-y-6">
+        <div className="card">
+          <div className="card-header">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 stats-icon-green rounded-lg flex items-center justify-center">
+                <SportsEsportsIcon fontSize="small" className="text-primary" />
+              </div>
+              <h2 className="text-xl font-semibold text-primary">Steam Inventory</h2>
+            </div>
+          </div>
+          <div className="card-body text-center py-12">
+            <WarningIcon className="text-6xl text-gray-400 mb-4" />
+            <h3 className="text-lg font-semibold text-foreground mb-2">
+              Authentication Required
+            </h3>
+            <p className="text-muted">
+              Please log in to view your Steam inventory.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Steam Inventory Summary Section */}
@@ -328,11 +420,55 @@ export const SteamInventory: React.FC = () => {
               Steam Inventory Summary
             </h2>
             <button
-              onClick={() => alert("Add Profile (Steam import)")}
-              className="primary-btn btn-green ml-4"
+              onClick={handleAddProfile}
+              className="primary-btn btn-green ml-4 flex items-center"
+              disabled={addingProfile}
             >
-              Add Profile
+              {addingProfile ? (
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+              ) : null}
+              {addingProfile ? "Importing..." : "Add Profile"}
             </button>
+            {addProfileNote && (
+              <span className="ml-4 text-xs text-muted">{addProfileNote}</span>
+            )}
+      {/* Import Steam Inventory Modal */}
+      {showImportModal && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-50">
+          <div className="bg-secondary rounded-lg p-6 max-w-md w-full mx-4 border border-primary">
+            <h3 className="text-xl font-semibold text-primary mb-4">Import Steam Inventory</h3>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-muted mb-2">Steam ID</label>
+              <input
+                type="text"
+                value={steamIdInput}
+                onChange={(e) => setSteamIdInput(e.target.value)}
+                placeholder="Enter your Steam ID..."
+                className="w-full px-3 py-2 border border-primary/20 rounded bg-tertiary text-primary"
+              />
+            </div>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowImportModal(false)}
+                className="px-4 py-2 text-sm rounded bg-gray-700 text-white hover:bg-gray-600"
+                disabled={addingProfile}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleImportConfirm}
+                className="px-4 py-2 text-sm bg-green-600 rounded text-white hover:bg-green-500 flex items-center"
+                disabled={addingProfile || !steamIdInput}
+              >
+                {addingProfile && (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                )}
+                Import
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
           </div>
         </div>
 

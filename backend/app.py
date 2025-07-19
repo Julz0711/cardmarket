@@ -1,3 +1,5 @@
+# Import the PriceEmpire Selenium scraper
+from priceempire_selenium_scraper import PriceEmpireSeleniumScraper
 from flask import Flask, jsonify, request, Response
 from flask_cors import CORS
 from datetime import datetime
@@ -814,13 +816,14 @@ def scrape_steam_inventory():
         # Get user ID
         user_id = request.current_user['user_id']
         
-        # Call the scraper without pricing options
+        # Call the scraper without pricing options, but with user_id for proper association
         scraped_items_data = scraper_manager.scrape_assets(
             'steam', 
             steam_id=steam_id, 
             app_id=app_id, 
             include_floats=include_floats,
-            headless=headless
+            headless=headless,
+            user_id=user_id  # Pass user_id to scraper for proper association
         )
         
         # Save scraped items to MongoDB using steam_item_model
@@ -853,7 +856,7 @@ def scrape_steam_inventory():
             
                 # Prepare item data for MongoDB
                 item_data = {
-                    'user_id': user_id,
+                    'user_id': item_info.get('user_id', user_id),  # Use scraper's user_id or fallback to request user_id
                     'name': item_info['name'],
                     'rarity': item_info.get('rarity', 'Unknown'),
                     'condition': item_info.get('condition'),
@@ -920,6 +923,14 @@ def scrape_steam_inventory():
         return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
 
 # Steam Inventory Management Routes
+@app.route('/api/steam/import', methods=['POST'])
+@auth_required
+def import_steam_inventory():
+    """DEPRECATED: Use /api/scrape/steam instead. This endpoint doesn't save to database."""
+    return jsonify({
+        'status': 'error', 
+        'message': 'This endpoint is deprecated. Please use /api/scrape/steam to properly save inventory to database.'
+    }), 400
 @app.route('/api/steam/items', methods=['GET'])
 @auth_required
 def get_steam_items():
@@ -1260,132 +1271,50 @@ def get_all_users():
 @app.route('/api/steam/update-prices', methods=['POST'])
 @auth_required
 def update_steam_prices():
+    user_id = request.current_user['user_id']
+    items = steam_item_model.get_items_by_user(user_id)
     """Update Steam item prices using SkinSnipe.com market data"""
     try:
-        data = request.get_json()
-        user_id = request.current_user['user_id']
-        
-        # Get parameters
-        item_ids = data.get('item_ids', [])  # Specific items to update, empty means all
-        headless = data.get('headless', True)
-        
-        # Override headless mode with environment variable for debugging
-        debug_mode = os.getenv('SCRAPER_DEBUG_MODE', 'false').lower() == 'true'
-        if debug_mode:
-            headless = False
-            logger.info("🔍 SCRAPER DEBUG MODE enabled - browser will be visible")
-        
-        # Get Steam items for the user
-        if item_ids:
-            # Update specific items
-            from bson import ObjectId
-            items = []
-            for item_id in item_ids:
-                item = steam_item_model.collection.find_one({"_id": ObjectId(item_id), "user_id": user_id})
-                if item:
-                    items.append(item)
-        else:
-            # Update all items
-            items = steam_item_model.get_items_by_user(user_id)
-        
-        if not items:
-            return jsonify({
-                'status': 'error',
-                'message': 'No Steam items found to update'
-            }), 400
-        
-        logger.info(f"Starting price update for {len(items)} Steam items")
-        
-        # Initialize SkinSnipe.com scraper
-        scraper = SkinSnipeScraper(headless=headless)
-        
+        # --- SkinSearch logic start ---
         updated_items = []
         failed_items = []
         skipped_items = []
-        
-        # Prepare items data for SkinSnipe.com scraper
-        items_for_pricing = []
-        for item in items:
-            # Use the stored condition directly (SkinSnipe handles conditions via variants)
-            condition = item.get('condition')
-            
-            items_for_pricing.append({
-                'item_id': str(item['_id']),
-                'name': item['name'],
-                'condition': condition
-            })
-        
-        # Scrape prices from SkinSnipe.com
-        price_results = scraper.scrape_item_prices(items_for_pricing)
-        
-        # Create a mapping of item IDs to results for easier lookup
-        result_map = {}
-        for result in price_results:
-            # Find the corresponding item_id from the original items_for_pricing
-            for pricing_item in items_for_pricing:
-                if (pricing_item['name'] == result['item_name'] and 
-                    pricing_item.get('condition') == result.get('condition')):
-                    result_map[pricing_item['item_id']] = result
-                    break
-        
-        # Update items with new prices
+        from skinsearch_scraper import SkinSearchScraper
+        scraper = SkinSearchScraper()
         for item in items:
             try:
                 item_id = str(item['_id'])
-                
-                # Look for result in mapping
-                if item_id in result_map:
-                    result = result_map[item_id]
-                    
-                    # Check if item was skipped (non-tradeable)
-                    if result.get('skipped', False):
-                        skipped_items.append({
-                            'name': item['name'],
-                            'reason': result.get('error', 'Item skipped (non-tradeable)')
-                        })
-                        continue
-                    
-                    # SkinSnipe.com provides USD prices, convert to EUR if needed
-                    usd_price = result['price']
-                    if usd_price > 0:
-                        # For now, assuming 1 USD = 0.85 EUR (you should use a real conversion API)
-                        eur_price = usd_price * 0.85
-                        
-                        # Update item in database
-                        update_result = steam_item_model.update_item(item_id, {
-                            'current_price': eur_price,
-                            'price_source': 'skinsnipe.com',
-                            'last_updated': datetime.now().isoformat()
-                        })
-                        
-                        if update_result:
-                            item['current_price'] = eur_price
-                            item['price_source'] = 'skinsnipe.com'
-                            updated_items.append(item)
-                            logger.info(f"Updated price for {item['name']}: €{eur_price:.2f} (${usd_price:.2f})")
-                        else:
-                            failed_items.append({
-                                'name': item['name'],
-                                'error': 'Database update failed'
-                            })
+                price_info = scraper.scrape_steam_item(item)
+                if price_info and hasattr(price_info, 'price') and price_info.price and price_info.price > 0:
+                    update_result = steam_item_model.update_item(item_id, {
+                        'current_price': price_info.price,
+                        'price_source': 'skinsearch.com',
+                        'last_updated': datetime.now().isoformat()
+                    })
+                    if update_result:
+                        item['current_price'] = price_info.price
+                        item['price_source'] = 'skinsearch.com'
+                        updated_items.append(item)
+                        logger.info(f"Updated price for {item['name']}: {price_info.price} {price_info.currency}")
                     else:
-                        skipped_items.append({
+                        failed_items.append({
                             'name': item['name'],
-                            'reason': 'No price found on SkinSnipe.com'
+                            'error': 'Database update failed'
                         })
                 else:
+                    # Log full error response if available
+                    logger.warning(f"SkinSearch price not found for item: {item['name']}. Full item: {item}")
                     skipped_items.append({
                         'name': item['name'],
-                        'reason': 'No price data returned from SkinSnipe.com'
+                        'reason': 'No price found on SkinSearch'
                     })
-                    
             except Exception as e:
-                logger.error(f"Error updating item {item['name']}: {e}")
+                logger.error(f"Error updating item {item.get('name', 'Unknown')}: {e}")
                 failed_items.append({
-                    'name': item['name'],
+                    'name': item.get('name', 'Unknown'),
                     'error': str(e)
                 })
-        
+        # --- SkinSearch logic end ---
         # Prepare response
         message_parts = []
         if updated_items:
@@ -1394,11 +1323,11 @@ def update_steam_prices():
             message_parts.append(f"skipped {len(skipped_items)} items (no price found)")
         if failed_items:
             message_parts.append(f"failed to update {len(failed_items)} items")
-        
         response_message = " and ".join(message_parts) if message_parts else "No items were processed"
-        
+        # If no prices were updated, return a warning status
+        status = 'success' if updated_items else 'warning'
         return jsonify({
-            'status': 'success',
+            'status': status,
             'message': response_message,
             'updated_items': len(updated_items),
             'skipped_items': len(skipped_items),
@@ -1409,7 +1338,6 @@ def update_steam_prices():
                 'failed': failed_items
             }
         })
-        
     except Exception as e:
         logger.error(f"Error updating Steam prices: {e}")
         return jsonify({

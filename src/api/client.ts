@@ -190,6 +190,19 @@ class ApiClient {
     return this.request(`/steam/items?page=${page}&per_page=${perPage}`);
   }
 
+  // Import Steam Inventory
+  async importSteamInventory(steamId: string): Promise<{
+    status: string;
+    items: SteamItem[];
+    message?: string;
+    total?: number;
+  }> {
+    return this.request("/steam/import", {
+      method: "POST",
+      body: JSON.stringify({ steam_id: steamId }),
+    });
+  }
+
   // Import from pandas
   async importFromPandas(cards: any[]): Promise<ApiResponse<any>> {
     return this.request<ApiResponse<any>>("/import/pandas", {
@@ -337,15 +350,24 @@ class ApiClient {
     enable_pricing?: boolean; // NEW: Enable pricing service
     headless?: boolean;
   }): Promise<{
+    status: string;
     message: string;
-    scraped_items: SteamItem[];
-    skipped_items?: Array<{
-      name: string;
-      asset_id: string;
-      message: string;
-    }>;
-    total_scraped: number;
-    total_skipped: number;
+    data: {
+      scraped_items: SteamItem[];
+      skipped_items?: Array<{
+        name: string;
+        asset_id: string;
+        message: string;
+      }>;
+      failed_items?: Array<{
+        name: string;
+        asset_id: string;
+        error: string;
+      }>;
+      total_scraped: number;
+      total_skipped: number;
+      total_failed: number;
+    };
   }> {
     // Steam scraping can take a long time with float values, so use a longer timeout
     const controller = new AbortController();
@@ -353,15 +375,24 @@ class ApiClient {
 
     try {
       const result = await this.request<{
+        status: string;
         message: string;
-        scraped_items: SteamItem[];
-        skipped_items?: Array<{
-          name: string;
-          asset_id: string;
-          message: string;
-        }>;
-        total_scraped: number;
-        total_skipped: number;
+        data: {
+          scraped_items: SteamItem[];
+          skipped_items?: Array<{
+            name: string;
+            asset_id: string;
+            message: string;
+          }>;
+          failed_items?: Array<{
+            name: string;
+            asset_id: string;
+            error: string;
+          }>;
+          total_scraped: number;
+          total_skipped: number;
+          total_failed: number;
+        };
       }>("/scrape/steam", {
         method: "POST",
         body: JSON.stringify(data),
