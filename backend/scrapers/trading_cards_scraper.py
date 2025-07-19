@@ -110,6 +110,8 @@ class TradingCardsScraper(BaseScraper):
         numbers = kwargs['numbers']
         
         cards = []
+
+        #test
         
         try:
             # Navigate to CardMarket search page
