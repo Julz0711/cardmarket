@@ -269,29 +269,43 @@ class CardModel:
             
             result = list(self.collection.aggregate(pipeline))
             
-            # Get Steam inventory stats if user_id is provided
+            # Get Steam inventory stats and items if user_id is provided
             steam_stats = {'total_value': 0, 'total_bought': 0, 'total_items': 0}
+            steam_items = []
             if user_id:
                 try:
                     # Use global steam_item_model instance
                     global steam_item_model
                     if steam_item_model:
                         steam_stats = steam_item_model.get_user_stats(user_id)
+                        steam_items = steam_item_model.get_user_items(user_id)
                 except Exception as e:
                     logger.warning(f"Failed to get Steam stats: {e}")
             
             if not result:
+                # Only Steam items, no cards
+                total_value = steam_stats.get('total_value', 0)
+                total_investment = steam_stats.get('total_bought', 0)
+                profit_loss = total_value - total_investment
+                profit_loss_percentage = (profit_loss / total_investment * 100) if total_investment > 0 else 0
+                
+                # Calculate Steam performers
+                steam_performers = self._calculate_performers(steam_items, 'steam')
+                
                 return {
-                    'total_portfolio_value': steam_stats.get('total_value', 0),
-                    'total_investment': steam_stats.get('total_bought', 0),
-                    'total_profit_loss': steam_stats.get('total_value', 0) - steam_stats.get('total_bought', 0),
-                    'total_profit_loss_percentage': 0,
+                    'total_portfolio_value': total_value,
+                    'total_investment': total_investment,
+                    'total_profit_loss': profit_loss,
+                    'total_profit_loss_percentage': profit_loss_percentage,
                     'asset_breakdown': {
                         'cards': {'value': 0, 'percentage': 0, 'count': 0},
-                        'steam': {'value': steam_stats.get('total_value', 0), 'percentage': 100, 'count': steam_stats.get('total_items', 0)}
+                        'steam': {'value': total_value, 'percentage': 100 if total_value > 0 else 0, 'count': steam_stats.get('total_items', 0)},
+                        'stocks': {'value': 0, 'percentage': 0, 'count': 0},
+                        'etfs': {'value': 0, 'percentage': 0, 'count': 0},
+                        'crypto': {'value': 0, 'percentage': 0, 'count': 0}
                     },
-                    'top_performers': [],
-                    'worst_performers': []
+                    'top_performers': steam_performers['top'],
+                    'worst_performers': steam_performers['worst']
                 }
             
             data = result[0]
@@ -305,22 +319,29 @@ class CardModel:
             profit_loss = total_value - total_investment
             profit_loss_percentage = (profit_loss / total_investment * 100) if total_investment > 0 else 0
             
+            # Calculate performers across all asset types
+            all_performers = []
             
-            # Calculate top/worst performers
-            cards = data['cards']
-            performers = []
-            for card in cards:
-                if card['price_bought'] > 0:
-                    card_profit_loss = (card['current_price'] - card['price_bought']) / card['price_bought'] * 100
-                    performers.append({
-                        'id': str(card['_id']),
-                        'name': card['name'],
-                        'current_price': card['current_price'],
-                        'price_bought': card['price_bought'],
-                        'profit_loss_percentage': card_profit_loss
-                    })
+            # Add card performers
+            card_performers = self._calculate_performers(data['cards'], 'card')
+            all_performers.extend(card_performers['all'])
+            logger.info(f"Card performers found: {len(card_performers['all'])}")
             
-            performers.sort(key=lambda x: x['profit_loss_percentage'], reverse=True)
+            # Add steam performers
+            steam_performers = self._calculate_performers(steam_items, 'steam')
+            all_performers.extend(steam_performers['all'])
+            logger.info(f"Steam performers found: {len(steam_performers['all'])}")
+            logger.info(f"Total performers: {len(all_performers)}")
+            
+            # Sort all performers by profit/loss percentage
+            all_performers.sort(key=lambda x: x['profit_loss_percentage'], reverse=True)
+            
+            # Get top 3 and worst 3
+            top_performers = all_performers[:3]  # Best performers (highest %)
+            worst_performers = all_performers[-3:] if len(all_performers) >= 3 else []  # Worst performers (lowest %)
+            
+            logger.info(f"Top 3 performers: {[p['name'] + ': ' + str(round(p['profit_loss_percentage'], 2)) + '%' for p in top_performers]}")
+            logger.info(f"Worst 3 performers: {[p['name'] + ': ' + str(round(p['profit_loss_percentage'], 2)) + '%' for p in worst_performers]}")
             
             # Calculate asset breakdown percentages
             cards_percentage = (cards_value / total_value * 100) if total_value > 0 else 0
@@ -347,8 +368,8 @@ class CardModel:
                         'count': steam_stats.get('total_items', 0)
                     }
                 },
-                'top_performers': performers[:5],
-                'worst_performers': performers[-5:] if len(performers) > 5 else []
+                'top_performers': top_performers,
+                'worst_performers': worst_performers
             }
             
         except Exception as e:
@@ -364,6 +385,61 @@ class CardModel:
                 'top_performers': [],
                 'worst_performers': []
             }
+    
+    def _calculate_performers(self, items: List[Dict], asset_type: str) -> Dict:
+        """Calculate top and worst performers for a list of items"""
+        performers = []
+        
+        logger.info(f"Processing {len(items)} {asset_type} items for performance calculation")
+        
+        for item in items:
+            price_bought = item.get('price_bought', 0)
+            current_price = item.get('current_price', 0)
+            name = item.get('name', 'Unknown')
+            
+            logger.debug(f"{asset_type} item '{name}': bought=${price_bought}, current=${current_price}")
+            
+            # Include items with purchase price OR Steam items with current value (treat as acquired for free)
+            should_include = False
+            if price_bought > 0:
+                should_include = True
+            elif asset_type == 'steam' and current_price > 0:
+                # For Steam items without purchase price, treat as acquired for "free" (show current value as gain)
+                should_include = True
+                price_bought = 0.01  # Use tiny value to avoid division by zero
+            
+            if should_include:
+                profit_loss_absolute = current_price - price_bought
+                profit_loss_percentage = (profit_loss_absolute / price_bought) * 100
+                
+                performer = {
+                    'id': str(item.get('_id', item.get('asset_id', 'unknown'))),
+                    'name': name,
+                    'current_price': current_price,
+                    'price_bought': price_bought if price_bought > 0.01 else 0,  # Show 0 for "free" items
+                    'profit_loss_absolute': profit_loss_absolute,
+                    'profit_loss_percentage': profit_loss_percentage,
+                    'asset_type': asset_type
+                }
+                
+                performers.append(performer)
+                logger.debug(f"Added performer: {name} ({asset_type}) - {profit_loss_percentage:.2f}%")
+            else:
+                logger.debug(f"Skipped {asset_type} item '{name}': no valid purchase price and no current value")
+        
+        # Sort by profit/loss percentage
+        performers.sort(key=lambda x: x['profit_loss_percentage'], reverse=True)
+        
+        logger.info(f"{asset_type} performers summary: {len(performers)} valid items")
+        if performers:
+            logger.info(f"Best {asset_type} performer: {performers[0]['name']} ({performers[0]['profit_loss_percentage']:.2f}%)")
+            logger.info(f"Worst {asset_type} performer: {performers[-1]['name']} ({performers[-1]['profit_loss_percentage']:.2f}%)")
+        
+        return {
+            'all': performers,
+            'top': performers[:3],
+            'worst': performers[-3:] if len(performers) >= 3 else []
+        }
 
 class SteamItemModel:
     """Model for Steam inventory items"""
@@ -453,6 +529,22 @@ class SteamItemModel:
         except Exception as e:
             logger.error(f"Error finding existing steam item: {e}")
             return None
+    
+    def get_user_items(self, user_id):
+        """Get all steam items for a user"""
+        try:
+            items = list(self.collection.find({"user_id": user_id}))
+            
+            # Convert ObjectId to string
+            for item in items:
+                if '_id' in item:
+                    item['_id'] = str(item['_id'])
+            
+            return items
+            
+        except Exception as e:
+            logger.error(f"Error getting steam items for user {user_id}: {e}")
+            return []
     
     def update_item(self, item_id, update_data):
         """Update a steam item"""

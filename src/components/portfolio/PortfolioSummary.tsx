@@ -6,6 +6,7 @@ import {
   ResponsiveContainer,
   Tooltip,
   Legend,
+  Sector,
 } from "recharts";
 import type { PortfolioSummary } from "../../types/assets";
 
@@ -34,7 +35,8 @@ const PortfolioSummaryComponent: React.FC<PortfolioSummaryProps> = ({
   // Prepare data for pie chart
   const pieChartData = Object.entries(summary.asset_breakdown || {})
     .filter(
-      ([, breakdown]) => breakdown && breakdown.count > 0 && breakdown.value > 0
+      ([, breakdown]) =>
+        breakdown && (breakdown.count > 0 || breakdown.value > 0)
     )
     .map(([type, breakdown]) => ({
       name: type.charAt(0).toUpperCase() + type.slice(1),
@@ -43,17 +45,111 @@ const PortfolioSummaryComponent: React.FC<PortfolioSummaryProps> = ({
       count: breakdown.count,
     }));
 
-  // Color scheme for different asset types
-  const COLORS = {
-    Cards: "#3B82F6", // Blue
-    Stocks: "#10B981", // Green
-    Etfs: "#8B5CF6", // Purple
-    Crypto: "#F59E0B", // Amber
-    Steam: "#EF4444", // Red
+  // Pie chart active sector state
+  const [activeIndex, setActiveIndex] = React.useState(0);
+  const onPieEnter = (_: any, index: number) => {
+    setActiveIndex(index);
   };
 
+  // Custom active sector renderer
+  const renderActiveShape = (props: any) => {
+    const {
+      cx,
+      cy,
+      midAngle,
+      innerRadius,
+      outerRadius,
+      startAngle,
+      endAngle,
+      fill,
+      payload,
+      percent,
+      value,
+    } = props;
+    const RADIAN = Math.PI / 180;
+    const sin = Math.sin(-RADIAN * midAngle);
+    const cos = Math.cos(-RADIAN * midAngle);
+    const sx = cx + (outerRadius + 10) * cos;
+    const sy = cy + (outerRadius + 10) * sin;
+    const mx = cx + (outerRadius + 30) * cos;
+    const my = cy + (outerRadius + 30) * sin;
+    const ex = mx + (cos >= 0 ? 1 : -1) * 22;
+    const ey = my;
+    const textAnchor = cos >= 0 ? "start" : "end";
+    return (
+      <g>
+        <text
+          x={cx}
+          y={cy}
+          dy={8}
+          textAnchor="middle"
+          fill={fill}
+          fontWeight="bold"
+        >
+          {payload.name}
+        </text>
+        <Sector
+          cx={cx}
+          cy={cy}
+          innerRadius={innerRadius}
+          outerRadius={outerRadius}
+          startAngle={startAngle}
+          endAngle={endAngle}
+          fill={fill}
+        />
+        <Sector
+          cx={cx}
+          cy={cy}
+          startAngle={startAngle}
+          endAngle={endAngle}
+          innerRadius={outerRadius + 6}
+          outerRadius={outerRadius + 10}
+          fill={fill}
+          stroke="none"
+        />
+        <path
+          d={`M${sx},${sy}L${mx},${my}L${ex},${ey}`}
+          stroke={fill}
+          fill="none"
+        />
+        <circle cx={ex} cy={ey} r={2} fill={fill} stroke="none" />
+        <text
+          x={ex + (cos >= 0 ? 1 : -1) * 12}
+          y={ey}
+          dy={-8}
+          textAnchor={textAnchor}
+          fill="#f8f8f8"
+        >{`Value €${value.toFixed(2)}`}</text>
+        <text
+          x={ex + (cos >= 0 ? 1 : -1) * 12}
+          y={ey}
+          dy={16}
+          textAnchor={textAnchor}
+          fill="#8e9297"
+        >
+          {`(${(percent * 100).toFixed(2)}%)`}
+        </text>
+      </g>
+    );
+  };
+
+  // Get theme colors once for performance
+  const themeColors = React.useMemo(() => {
+    const getThemeColor = (variable: string) =>
+      getComputedStyle(document.documentElement)
+        .getPropertyValue(variable)
+        .trim() || "#6B7280";
+    return {
+      Cards: getThemeColor("--color-gold"),
+      Stocks: getThemeColor("--color-green"),
+      Etfs: getThemeColor("--color-red"),
+      Crypto: getThemeColor("--color-white"),
+      Steam: getThemeColor("--color-blue"),
+    };
+  }, []);
+
   const getColorForAsset = (name: string) => {
-    return COLORS[name as keyof typeof COLORS] || "#6B7280";
+    return themeColors[name as keyof typeof themeColors] || "#6B7280";
   };
 
   return (
@@ -72,7 +168,7 @@ const PortfolioSummaryComponent: React.FC<PortfolioSummaryProps> = ({
                   <AttachMoneyIcon className="w-6 h-6" />
                 </div>
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-secondary">
+                  <p className="text-xs font-bold text-muted">
                     Portfolio Value
                   </p>
                   <p className="text-2xl font-semibold text-primary">
@@ -88,7 +184,7 @@ const PortfolioSummaryComponent: React.FC<PortfolioSummaryProps> = ({
                   <TrendingUpIcon className="w-6 h-6" />
                 </div>
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-secondary">
+                  <p className="text-xs font-bold text-muted">
                     Total Investment
                   </p>
                   <p className="text-2xl font-semibold text-primary">
@@ -110,9 +206,7 @@ const PortfolioSummaryComponent: React.FC<PortfolioSummaryProps> = ({
                   <BarChartIcon className="w-6 h-6" />
                 </div>
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-secondary">
-                    Profit/Loss
-                  </p>
+                  <p className="text-xs font-bold text-muted">Profit/Loss</p>
                   <p
                     className={`text-2xl font-semibold ${getProfitLossColor(
                       summary.total_profit_loss
@@ -136,7 +230,7 @@ const PortfolioSummaryComponent: React.FC<PortfolioSummaryProps> = ({
                   <PercentIcon className="w-6 h-6" />
                 </div>
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-secondary">Return %</p>
+                  <p className="text-xs font-bold text-muted">Return %</p>
                   <p
                     className={`text-2xl font-semibold ${getProfitLossColor(
                       summary.total_profit_loss_percentage
@@ -156,19 +250,18 @@ const PortfolioSummaryComponent: React.FC<PortfolioSummaryProps> = ({
                 Asset Allocation
               </h3>
               {pieChartData.length > 0 ? (
-                <div className="h-80 w-full">
+                <div className="h-80 w-full bg-primary border border-primary rounded-lg">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
+                        activeShape={renderActiveShape}
                         data={pieChartData}
                         cx="50%"
                         cy="50%"
-                        labelLine={false}
-                        label={({ name, percentage }) =>
-                          `${name} ${percentage.toFixed(1)}%`
-                        }
+                        innerRadius={60}
                         outerRadius={100}
                         fill="#8884d8"
+                        stroke="none"
                         dataKey="value"
                       >
                         {pieChartData.map((entry, index) => (
@@ -178,13 +271,6 @@ const PortfolioSummaryComponent: React.FC<PortfolioSummaryProps> = ({
                           />
                         ))}
                       </Pie>
-                      <Tooltip
-                        formatter={(value: number) => [
-                          formatCurrency(value),
-                          "Value",
-                        ]}
-                        labelFormatter={(label) => `${label}`}
-                      />
                       <Legend
                         verticalAlign="bottom"
                         height={36}
@@ -231,16 +317,16 @@ const PortfolioSummaryComponent: React.FC<PortfolioSummaryProps> = ({
                           key={asset.id}
                           className="flex items-center justify-between p-2 bg-tertiary rounded"
                         >
-                          <span className="text-sm text-primary">
-                            {asset.name}
-                          </span>
+                          <div className="flex flex-col">
+                            <span className="text-sm text-primary">
+                              {asset.name}
+                            </span>
+                            <span className="text-xs text-muted capitalize">
+                              {asset.asset_type}
+                            </span>
+                          </div>
                           <span className="text-sm text-green">
-                            +
-                            {formatPercentage(
-                              ((asset.current_price - asset.price_bought) /
-                                asset.price_bought) *
-                                100
-                            )}
+                            +{formatPercentage(asset.profit_loss_percentage)}
                           </span>
                         </div>
                       ))}
@@ -259,15 +345,16 @@ const PortfolioSummaryComponent: React.FC<PortfolioSummaryProps> = ({
                           key={asset.id}
                           className="flex items-center justify-between p-2 bg-tertiary rounded"
                         >
-                          <span className="text-sm text-primary">
-                            {asset.name}
-                          </span>
+                          <div className="flex flex-col">
+                            <span className="text-sm text-primary">
+                              {asset.name}
+                            </span>
+                            <span className="text-xs text-muted capitalize">
+                              {asset.asset_type}
+                            </span>
+                          </div>
                           <span className="text-sm text-red">
-                            {formatPercentage(
-                              ((asset.current_price - asset.price_bought) /
-                                asset.price_bought) *
-                                100
-                            )}
+                            {formatPercentage(asset.profit_loss_percentage)}
                           </span>
                         </div>
                       ))}

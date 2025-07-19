@@ -51,7 +51,10 @@ export const SteamScraper: React.FC<SteamScraperProps> = ({
       // Create detailed success message
       let successMessage = response.message;
 
-      if (response.data.skipped_items && response.data.skipped_items.length > 0) {
+      if (
+        response.data.skipped_items &&
+        response.data.skipped_items.length > 0
+      ) {
         const skippedNames = response.data.skipped_items
           .map((item: any) => item.name)
           .slice(0, 5); // Show first 5
@@ -59,7 +62,9 @@ export const SteamScraper: React.FC<SteamScraperProps> = ({
           ", "
         )}`;
         if (response.data.skipped_items.length > 5) {
-          successMessage += ` and ${response.data.skipped_items.length - 5} more...`;
+          successMessage += ` and ${
+            response.data.skipped_items.length - 5
+          } more...`;
         }
       }
 

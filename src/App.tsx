@@ -2,11 +2,6 @@ import { useState, useEffect, useCallback } from "react";
 import AssetTable from "./components/common/AssetTable";
 import PortfolioSummary from "./components/portfolio/PortfolioSummary";
 import UserManagement from "./components/admin/UserManagement";
-import { CardsScraper } from "./components/scrapers/CardsScraper";
-import { StocksScraper } from "./components/scrapers/StocksScraper";
-import { CryptoScraper } from "./components/scrapers/CryptoScraper";
-import { ETFScraper } from "./components/scrapers/ETFScraper";
-import { SteamScraper } from "./components/scrapers/SteamScraper";
 import { SteamInventory } from "./components/SteamInventory";
 import { api, type Asset, type AssetType, type Card } from "./api/client";
 import type { PortfolioSummary as PortfolioSummaryType } from "./types/assets";
@@ -15,7 +10,6 @@ import { AuthButton } from "./components/Auth/AuthButton";
 
 // Material Icons
 import DashboardIcon from "@mui/icons-material/Dashboard";
-import DataObjectIcon from "@mui/icons-material/DataObject";
 import StyleIcon from "@mui/icons-material/Style";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import AccountBalanceIcon from "@mui/icons-material/AccountBalance";
@@ -277,73 +271,6 @@ function AppContent({
         );
       case "steam":
         return <SteamInventory />;
-      case "scrapers":
-        return (
-          <div className="space-y-6">
-            {/* Scraper Tabs */}
-            <div>
-              <nav className="mb-px flex space-x-4">
-                {[
-                  {
-                    type: "cards" as AssetType,
-                    label: "Trading Cards",
-                    icon: StyleIcon,
-                  },
-                  {
-                    type: "stocks" as AssetType,
-                    label: "Stocks",
-                    icon: TrendingUpIcon,
-                  },
-                  {
-                    type: "etfs" as AssetType,
-                    label: "ETFs",
-                    icon: AccountBalanceIcon,
-                  },
-                  {
-                    type: "crypto" as AssetType,
-                    label: "Crypto",
-                    icon: CurrencyBitcoinIcon,
-                  },
-                  {
-                    type: "steam" as AssetType,
-                    label: "Steam Inventory",
-                    icon: SportsEsportsIcon,
-                  },
-                ].map(({ type, label, icon: Icon }) => (
-                  <button
-                    key={type}
-                    onClick={() => setActiveScraperTab(type)}
-                    className={`nav-primary nav-sm ${
-                      activeScraperTab === type ? "active" : ""
-                    }`}
-                  >
-                    <Icon className="mr-2" />
-                    {label}
-                  </button>
-                ))}
-              </nav>
-            </div>
-
-            {/* Scraper Content */}
-            <div>
-              {activeScraperTab === "cards" && (
-                <CardsScraper onScrapingComplete={handleCardsScraping} />
-              )}
-              {activeScraperTab === "stocks" && (
-                <StocksScraper onScrapingComplete={() => {}} />
-              )}
-              {activeScraperTab === "etfs" && (
-                <ETFScraper onScrapingComplete={() => {}} />
-              )}
-              {activeScraperTab === "crypto" && (
-                <CryptoScraper onScrapingComplete={() => {}} />
-              )}
-              {activeScraperTab === "steam" && (
-                <SteamScraper onScrapingComplete={() => {}} />
-              )}
-            </div>
-          </div>
-        );
       case "users":
         return <UserManagement />;
       default:
@@ -372,7 +299,6 @@ function AppContent({
           <nav className="flex space-x-4">
             {[
               { key: "dashboard", label: "Dashboard", icon: DashboardIcon },
-              { key: "scrapers", label: "Data Sources", icon: DataObjectIcon },
               { key: "cards", label: "Trading Cards", icon: StyleIcon },
               { key: "stocks", label: "Stocks", icon: TrendingUpIcon },
               { key: "etfs", label: "ETFs", icon: AccountBalanceIcon },

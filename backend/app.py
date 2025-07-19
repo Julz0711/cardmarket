@@ -507,17 +507,7 @@ def get_portfolio_summary():
             'total_investment': portfolio_summary.get('total_investment', 0),
             'total_profit_loss': portfolio_summary.get('total_profit_loss', 0),
             'total_profit_loss_percentage': portfolio_summary.get('total_profit_loss_percentage', 0),
-            'asset_breakdown': {
-                'cards': {
-                    'value': portfolio_summary.get('total_portfolio_value', 0),
-                    'percentage': 100.0,
-                    'count': portfolio_summary.get('total_cards', 0)
-                },
-                'stocks': {'value': 0, 'percentage': 0, 'count': 0},
-                'etfs': {'value': 0, 'percentage': 0, 'count': 0},
-                'crypto': {'value': 0, 'percentage': 0, 'count': 0},
-                'steam': {'value': 0, 'percentage': 0, 'count': 0}
-            },
+            'asset_breakdown': portfolio_summary.get('asset_breakdown', {}),
             'top_performers': top_performers,
             'worst_performers': worst_performers
         }
@@ -1269,6 +1259,152 @@ def get_all_users():
     except Exception as e:
         logger.error(f"Error fetching users: {str(e)}")
         return jsonify({'error': 'Failed to fetch users'}), 500
+
+@app.route('/api/steam/update-floats', methods=['POST'])
+@auth_required
+def update_steam_floats():
+    """Update Steam item float values and paint seeds using CSFloat"""
+    try:
+        user_id = request.current_user['user_id']
+        items = steam_item_model.get_items_by_user(user_id)
+        
+        if not items:
+            return jsonify({
+                'status': 'error', 
+                'message': 'No Steam items found to update'
+            }), 400
+        
+        logger.info(f"Starting float update for {len(items)} Steam items")
+        
+        updated_items = []
+        failed_items = []
+        skipped_items = []
+        
+        # Import CSFloat scraper
+        try:
+            from scrapers.csfloat_scraper import CSFloatScraper
+            csfloat_scraper = CSFloatScraper(headless=True)
+        except ImportError:
+            return jsonify({
+                'status': 'error',
+                'message': 'CSFloat scraper not available'
+            }), 503
+        
+        try:
+            for i, item in enumerate(items):
+                try:
+                    item_id = str(item['_id'])
+                    item_name = item.get('name', 'Unknown')
+                    
+                    logger.info(f"Processing item {i+1}/{len(items)}: {item_name}")
+                    
+                    # Check if item has inspect link (only items with inspect links can have floats)
+                    # For now, we'll simulate this check - in real implementation, 
+                    # you'd need the inspect link from Steam inventory data
+                    
+                    # Skip items that already have float data
+                    if item.get('float_value') is not None:
+                        skipped_items.append({
+                            'name': item_name,
+                            'reason': 'Already has float data'
+                        })
+                        continue
+                    
+                    # For demo purposes, we'll skip items without weapon category
+                    # In real implementation, you'd use the inspect link
+                    if item.get('item_category', '').lower() not in ['weapon', 'knife', 'glove']:
+                        skipped_items.append({
+                            'name': item_name,
+                            'reason': 'Item type does not support float values'
+                        })
+                        continue
+                    
+                    # TODO: Get actual inspect link from Steam inventory data
+                    # For now, we'll simulate with a placeholder
+                    inspect_link = item.get('inspect_link')
+                    if not inspect_link:
+                        skipped_items.append({
+                            'name': item_name,
+                            'reason': 'No inspect link available'
+                        })
+                        continue
+                    
+                    # Get float data from CSFloat
+                    float_data = csfloat_scraper.get_float_data(inspect_link)
+                    
+                    if float_data and float_data.success:
+                        # Update item in database
+                        update_data = {
+                            'float_value': float_data.float_value,
+                            'paint_seed': float_data.paint_seed,
+                            'last_updated': datetime.now().isoformat()
+                        }
+                        
+                        update_result = steam_item_model.update_item(item_id, update_data)
+                        if update_result:
+                            item.update(update_data)
+                            updated_items.append(item)
+                            logger.info(f"Updated float for {item_name}: Float={float_data.float_value}, Pattern={float_data.paint_seed}")
+                        else:
+                            failed_items.append({
+                                'name': item_name,
+                                'error': 'Database update failed'
+                            })
+                    else:
+                        error_msg = float_data.error if float_data else "Unknown error"
+                        failed_items.append({
+                            'name': item_name,
+                            'error': f'CSFloat error: {error_msg}'
+                        })
+                        
+                except Exception as e:
+                    logger.error(f"Error updating float for item {item.get('name', 'Unknown')}: {e}")
+                    failed_items.append({
+                        'name': item.get('name', 'Unknown'),
+                        'error': str(e)
+                    })
+                    
+        finally:
+            csfloat_scraper._cleanup()
+        
+        # Prepare response
+        message_parts = []
+        if updated_items:
+            message_parts.append(f"Updated float data for {len(updated_items)} items")
+        if skipped_items:
+            message_parts.append(f"skipped {len(skipped_items)} items")
+        if failed_items:
+            message_parts.append(f"failed to update {len(failed_items)} items")
+            
+        response_message = " and ".join(message_parts) if message_parts else "No items were processed"
+        status = 'success' if updated_items else 'warning'
+        
+        return jsonify({
+            'status': status,
+            'message': response_message,
+            'updated_items': len(updated_items),
+            'skipped_items': len(skipped_items),
+            'failed_items': len(failed_items),
+            'details': {
+                'updated': [
+                    {
+                        'name': item['name'], 
+                        'float_value': item.get('float_value'),
+                        'paint_seed': item.get('paint_seed')
+                    } 
+                    for item in updated_items
+                ],
+                'skipped': skipped_items,
+                'failed': failed_items
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Error updating Steam floats: {e}")
+        return jsonify({
+            'status': 'error',
+            'message': f'Failed to update float data: {str(e)}'
+        }), 500
 
 @app.route('/api/steam/update-prices', methods=['POST'])
 @auth_required

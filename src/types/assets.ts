@@ -60,10 +60,12 @@ export interface SteamItem extends BaseAsset {
   rarity: string;
   condition?: string;
   float_value?: number;
+  paint_seed?: number;
   asset_id: string;
   image_url?: string;
   market_hash_name?: string;
   steam_id?: string;
+  overpay?: number;
 }
 
 // Union type for all assets
@@ -121,6 +123,17 @@ export type AssetStats =
   | CryptoStats
   | SteamStats;
 
+// Performer interface for top/worst performers
+export interface Performer {
+  id: string;
+  name: string;
+  current_price: number;
+  price_bought: number;
+  profit_loss_absolute: number;
+  profit_loss_percentage: number;
+  asset_type: string;
+}
+
 // Portfolio summary
 export interface PortfolioSummary {
   total_portfolio_value: number;
@@ -134,6 +147,6 @@ export interface PortfolioSummary {
       count: number;
     };
   };
-  top_performers: Asset[];
-  worst_performers: Asset[];
+  top_performers: Performer[];
+  worst_performers: Performer[];
 }

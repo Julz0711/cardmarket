@@ -9,8 +9,8 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import WarningIcon from "@mui/icons-material/Warning";
 import SearchIcon from "@mui/icons-material/Search";
 import EditIcon from "@mui/icons-material/Edit";
-import SaveIcon from "@mui/icons-material/Save";
-import CancelIcon from "@mui/icons-material/Cancel";
+import RefreshIcon from "@mui/icons-material/Refresh";
+import CheckIcon from "@mui/icons-material/Check";
 
 export const SteamInventory: React.FC = () => {
   const { isAuthenticated } = useAuth();
@@ -20,16 +20,28 @@ export const SteamInventory: React.FC = () => {
   const [deleteAllConfirm, setDeleteAllConfirm] = useState(false);
   const [deletingAll, setDeletingAll] = useState(false);
   const [updatingPrices, setUpdatingPrices] = useState(false);
+  const [updatingFloats, setUpdatingFloats] = useState(false);
 
   // Edit price states
   const [editingItem, setEditingItem] = useState<string | null>(null);
   const [editPrice, setEditPrice] = useState("");
+  // Overpay states
+  const [editingOverpayItem, setEditingOverpayItem] = useState<string | null>(
+    null
+  );
+  const [editOverpay, setEditOverpay] = useState("");
 
   // Add Profile states
   const [addingProfile, setAddingProfile] = useState(false);
   const [addProfileNote, setAddProfileNote] = useState("");
   const [showImportModal, setShowImportModal] = useState(false);
   const [steamIdInput, setSteamIdInput] = useState("");
+  // Profile ID state
+  const [profileId, setProfileId] = useState<string>("");
+
+  // Import options
+  const [includePrices, setIncludePrices] = useState(false);
+  const [includeFloats, setIncludeFloats] = useState(false);
 
   // Filter states
   const [nameFilter, setNameFilter] = useState("");
@@ -39,7 +51,9 @@ export const SteamInventory: React.FC = () => {
 
   // Sort states
   // Default: sort by current price, descending (high to low)
-  const [sortBy, setSortBy] = useState<"name" | "rarity" | "price" | "profit">("price");
+  const [sortBy, setSortBy] = useState<"name" | "rarity" | "price" | "profit">(
+    "price"
+  );
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
   useEffect(() => {
@@ -60,7 +74,7 @@ export const SteamInventory: React.FC = () => {
 
   const handleImportConfirm = async () => {
     setAddingProfile(true);
-    setAddProfileNote("Importing Steam inventory and scraping prices. This may take a minute...");
+    setAddProfileNote("Importing Steam inventory. This may take a minute...");
     setError("");
     setShowImportModal(false);
     try {
@@ -68,16 +82,19 @@ export const SteamInventory: React.FC = () => {
       const scrapeResponse = await apiClient.scrapeSteam({
         steam_id: steamIdInput,
         headless: true,
-        include_floats: true
+        include_floats: includeFloats,
+        include_prices: includePrices,
       });
-      
+
+      // Set profileId to the imported Steam ID
+      setProfileId(steamIdInput);
+
       // Reload items from database to get the saved items
       await loadSteamItems();
-      
+
       // Handle response format from backend
       const totalScraped = scrapeResponse.data.total_scraped;
       setAddProfileNote(`Successfully imported ${totalScraped} Steam items.`);
-      
     } catch (err) {
       setError("Failed to import Steam inventory");
       setAddProfileNote("");
@@ -85,6 +102,8 @@ export const SteamInventory: React.FC = () => {
     } finally {
       setAddingProfile(false);
       setSteamIdInput("");
+      setIncludePrices(false);
+      setIncludeFloats(false);
     }
   };
 
@@ -100,9 +119,16 @@ export const SteamInventory: React.FC = () => {
       setError(""); // Clear any previous errors
       const response = await apiClient.getSteamItems(1, 1000);
       setItems(response.items || []);
+      // If items exist, set profileId from the first item's steam_id
+      if (response.items && response.items.length > 0) {
+        const firstSteamId = response.items[0].steam_id;
+        if (firstSteamId) setProfileId(firstSteamId);
+      }
     } catch (err: any) {
-      if (err?.message?.includes('401') || err?.status === 401) {
-        setError("Authentication required. Please log in to view your Steam inventory.");
+      if (err?.message?.includes("401") || err?.status === 401) {
+        setError(
+          "Authentication required. Please log in to view your Steam inventory."
+        );
       } else {
         setError("Failed to load Steam inventory");
       }
@@ -115,6 +141,8 @@ export const SteamInventory: React.FC = () => {
   const handleEditPrice = (item: SteamItem) => {
     setEditingItem(item._id || item.id?.toString() || "");
     setEditPrice(item.price_bought?.toString() || "0");
+    setEditingOverpayItem(null);
+    setEditOverpay("");
   };
 
   const handleSavePrice = async (itemId: string) => {
@@ -139,9 +167,31 @@ export const SteamInventory: React.FC = () => {
     }
   };
 
-  const handleCancelEdit = () => {
+  // Overpay edit/save handlers
+  const handleEditOverpay = (item: SteamItem) => {
+    setEditingOverpayItem(item._id || item.id?.toString() || "");
+    setEditOverpay((item.overpay ?? "").toString());
     setEditingItem(null);
     setEditPrice("");
+  };
+
+  const handleSaveOverpay = async (itemId: string) => {
+    try {
+      let overpay = Math.abs(parseFloat(editOverpay) || 0); // Only positive
+      await apiClient.updateSteamItem(itemId, { overpay });
+      setItems(
+        items.map((item) =>
+          (item._id || item.id?.toString()) === itemId
+            ? { ...item, overpay }
+            : item
+        )
+      );
+      setEditingOverpayItem(null);
+      setEditOverpay("");
+    } catch (err) {
+      setError("Failed to update overpay");
+      console.error(err);
+    }
   };
 
   const handleDeleteAllItems = async () => {
@@ -192,8 +242,13 @@ export const SteamInventory: React.FC = () => {
       }
 
       // Show success or warning message
-      if (response.status === "warning" || response.details.updated.length === 0) {
-        setError("No prices could be updated. SkinSearch may be down or blocking requests.");
+      if (
+        response.status === "warning" ||
+        response.details.updated.length === 0
+      ) {
+        setError(
+          "No prices could be updated. SkinSearch may be down or blocking requests."
+        );
       } else {
         setError("");
       }
@@ -203,6 +258,54 @@ export const SteamInventory: React.FC = () => {
       console.error(err);
     } finally {
       setUpdatingPrices(false);
+    }
+  };
+
+  const handleUpdateFloats = async () => {
+    try {
+      setUpdatingFloats(true);
+      setError("");
+
+      const response = await apiClient.updateSteamFloats({
+        headless: true,
+      });
+
+      // Update local state with new float data
+      if (response.details.updated.length > 0) {
+        setItems((prevItems) =>
+          prevItems.map((item) => {
+            const updatedItem = response.details.updated.find(
+              (updated) => updated.name === item.name
+            );
+            if (updatedItem) {
+              return {
+                ...item,
+                float_value: updatedItem.float_value ?? undefined,
+                paint_seed: updatedItem.paint_seed ?? undefined,
+              };
+            }
+            return item;
+          })
+        );
+      }
+
+      // Show success or warning message
+      if (
+        response.status === "warning" ||
+        response.details.updated.length === 0
+      ) {
+        setError(
+          "No float values could be updated. CSFloat may be down or items may not have inspect links."
+        );
+      } else {
+        setError("");
+      }
+      console.log(`Float update completed: ${response.message}`);
+    } catch (err) {
+      setError("Failed to update float values from CSFloat");
+      console.error(err);
+    } finally {
+      setUpdatingFloats(false);
     }
   };
 
@@ -355,6 +458,9 @@ export const SteamInventory: React.FC = () => {
     return colors[condition] || "text-gray-500";
   };
 
+  const inputStyle =
+    "w-full px-2 py-1 text-sm border-2 border-primary hover:border-white rounded-md bg-primary text-primary placeholder-muted";
+
   if (loading) {
     return (
       <div className="card">
@@ -390,7 +496,9 @@ export const SteamInventory: React.FC = () => {
               <div className="w-8 h-8 stats-icon-green rounded-lg flex items-center justify-center">
                 <SportsEsportsIcon fontSize="small" className="text-primary" />
               </div>
-              <h2 className="text-xl font-semibold text-primary">Steam Inventory</h2>
+              <h2 className="text-xl font-semibold text-primary">
+                Steam Inventory
+              </h2>
             </div>
           </div>
           <div className="card-body text-center py-12">
@@ -412,63 +520,138 @@ export const SteamInventory: React.FC = () => {
       {/* Steam Inventory Summary Section */}
       <div className="card">
         <div className="card-header">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 stats-icon-green rounded-lg flex items-center justify-center">
-              <SportsEsportsIcon fontSize="small" className="text-primary" />
+          <div className="flex items-center justify-between gap-3">
+            <div className=" flex items-center justify-center gap-4">
+              <div className="w-8 h-8 stats-icon-blue rounded-lg flex items-center justify-center">
+                <SportsEsportsIcon fontSize="small" className="text-primary" />
+              </div>
+              <h2 className="text-xl font-semibold text-primary">
+                Steam Inventory Summary
+              </h2>
             </div>
-            <h2 className="text-xl font-semibold text-primary">
-              Steam Inventory Summary
-            </h2>
-            <button
-              onClick={handleAddProfile}
-              className="primary-btn btn-green ml-4 flex items-center"
-              disabled={addingProfile}
-            >
-              {addingProfile ? (
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-              ) : null}
-              {addingProfile ? "Importing..." : "Add Profile"}
-            </button>
-            {addProfileNote && (
-              <span className="ml-4 text-xs text-muted">{addProfileNote}</span>
+
+            {/* Steam Profile Actions */}
+            <div className="flex items-center gap-3">
+              {profileId ? (
+                <span className="ml-4 text-muted font-semibold text-sm">
+                  Current Profile: {profileId}
+                </span>
+              ) : (
+                <button
+                  onClick={handleAddProfile}
+                  className="primary-btn btn-green ml-4 flex items-center"
+                  disabled={addingProfile}
+                >
+                  {addingProfile ? (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  ) : null}
+                  {addingProfile ? "Importing..." : "Add Profile"}
+                </button>
+              )}
+              {/* Delete Inventory */}
+              {items.length > 0 && (
+                <button
+                  onClick={() => setDeleteAllConfirm(true)}
+                  className="primary-btn btn-red text-sm px-3 py-1 flex items-center"
+                  disabled={deletingAll}
+                >
+                  {deletingAll ? (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  ) : (
+                    <DeleteIcon fontSize="small" className="mr-1" />
+                  )}
+                  Clear Inventory
+                </button>
+              )}
+              {addProfileNote && (
+                <span className="ml-4 text-xs text-muted">
+                  {addProfileNote}
+                </span>
+              )}
+            </div>
+            {/* Import Steam Inventory Modal */}
+            {showImportModal && (
+              <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-50">
+                <div className="bg-secondary rounded-lg p-6 max-w-md w-full mx-4 border border-primary">
+                  <h3 className="text-xl font-semibold text-primary mb-4">
+                    Import Steam Inventory
+                  </h3>
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-muted mb-2">
+                      Steam ID
+                    </label>
+                    <input
+                      type="text"
+                      value={steamIdInput}
+                      onChange={(e) => setSteamIdInput(e.target.value)}
+                      placeholder="Enter your Steam ID..."
+                      className="w-full px-3 py-2 border border-primary/20 rounded bg-tertiary text-primary"
+                    />
+                  </div>
+
+                  {/* Import Options */}
+                  <div className="mb-4 space-y-3">
+                    <h4 className="text-sm font-medium text-muted">
+                      Import Options
+                    </h4>
+
+                    <label className="flex items-center space-x-3">
+                      <input
+                        type="checkbox"
+                        checked={includePrices}
+                        onChange={(e) => setIncludePrices(e.target.checked)}
+                        className="w-4 h-4 text-blue-600 bg-tertiary border-primary/20 rounded focus:ring-blue-500"
+                      />
+                      <div className="flex flex-col">
+                        <span className="text-sm text-primary">
+                          Include Prices
+                        </span>
+                        <span className="text-xs text-muted">
+                          Scrape current market prices (can be updated later)
+                        </span>
+                      </div>
+                    </label>
+
+                    <label className="flex items-center space-x-3">
+                      <input
+                        type="checkbox"
+                        checked={includeFloats}
+                        onChange={(e) => setIncludeFloats(e.target.checked)}
+                        className="w-4 h-4 text-blue-600 bg-tertiary border-primary/20 rounded focus:ring-blue-500"
+                      />
+                      <div className="flex flex-col">
+                        <span className="text-sm text-primary">
+                          Include Float & Pattern
+                        </span>
+                        <span className="text-xs text-muted">
+                          Fetch float values and paint seeds from CSFloat (can
+                          be updated later)
+                        </span>
+                      </div>
+                    </label>
+                  </div>
+                  <div className="flex justify-end gap-3">
+                    <button
+                      onClick={() => setShowImportModal(false)}
+                      className="px-4 py-2 text-sm rounded bg-gray-700 text-white hover:bg-gray-600"
+                      disabled={addingProfile}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleImportConfirm}
+                      className="px-4 py-2 text-sm bg-green-600 rounded text-white hover:bg-green-500 flex items-center"
+                      disabled={addingProfile || !steamIdInput}
+                    >
+                      {addingProfile && (
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      )}
+                      Import
+                    </button>
+                  </div>
+                </div>
+              </div>
             )}
-      {/* Import Steam Inventory Modal */}
-      {showImportModal && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-50">
-          <div className="bg-secondary rounded-lg p-6 max-w-md w-full mx-4 border border-primary">
-            <h3 className="text-xl font-semibold text-primary mb-4">Import Steam Inventory</h3>
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-muted mb-2">Steam ID</label>
-              <input
-                type="text"
-                value={steamIdInput}
-                onChange={(e) => setSteamIdInput(e.target.value)}
-                placeholder="Enter your Steam ID..."
-                className="w-full px-3 py-2 border border-primary/20 rounded bg-tertiary text-primary"
-              />
-            </div>
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => setShowImportModal(false)}
-                className="px-4 py-2 text-sm rounded bg-gray-700 text-white hover:bg-gray-600"
-                disabled={addingProfile}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleImportConfirm}
-                className="px-4 py-2 text-sm bg-green-600 rounded text-white hover:bg-green-500 flex items-center"
-                disabled={addingProfile || !steamIdInput}
-              >
-                {addingProfile && (
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                )}
-                Import
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
           </div>
         </div>
 
@@ -477,9 +660,7 @@ export const SteamInventory: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             {/* Total Items */}
             <div className="stats-card">
-              <div className="text-sm font-medium text-secondary">
-                Total Items
-              </div>
+              <div className="text-xs font-bold text-muted">Total Items</div>
               <div className="text-2xl font-bold text-primary">
                 {filteredItems.length}
               </div>
@@ -487,9 +668,7 @@ export const SteamInventory: React.FC = () => {
 
             {/* Total Value */}
             <div className="stats-card">
-              <div className="text-sm font-medium text-secondary">
-                Total Value
-              </div>
+              <div className="text-xs font-bold text-muted">Total Value</div>
               <div className="text-2xl font-bold text-primary">
                 €
                 {filteredItems
@@ -500,7 +679,7 @@ export const SteamInventory: React.FC = () => {
 
             {/* Total Invested */}
             <div className="stats-card">
-              <div className="text-sm font-medium text-secondary">
+              <div className="text-xs font-bold text-muted">
                 Total Investment
               </div>
               <div className="text-2xl font-bold text-primary">
@@ -527,17 +706,15 @@ export const SteamInventory: React.FC = () => {
 
               return (
                 <div className="stats-card">
-                  <div className="text-sm font-medium text-secondary">
-                    Total P&L
-                  </div>
+                  <div className="text-xs font-bold text-muted">Total P&L</div>
                   <div
                     className={`text-2xl font-bold ${
-                      profitLoss >= 0 ? "text-green-600" : "text-red-600"
+                      profitLoss >= 0 ? "text-green" : "text-red"
                     }`}
                   >
                     {profitLoss >= 0 ? "+" : ""}€
                     {Math.abs(profitLoss).toFixed(2)}
-                    <div className="text-sm font-normal">
+                    <div className="text-xs font-normal">
                       ({profitLossPercentage >= 0 ? "+" : ""}
                       {profitLossPercentage.toFixed(2)}%)
                     </div>
@@ -562,38 +739,38 @@ export const SteamInventory: React.FC = () => {
               {items.length > 0 && (
                 <button
                   onClick={handleUpdatePrices}
-                  className="primary-btn btn-blue text-sm px-3 py-1 flex items-center"
-                  disabled={updatingPrices}
+                  className="primary-btn btn-black text-sm px-3 py-1 flex items-center"
+                  disabled={updatingPrices || updatingFloats}
                 >
                   {updatingPrices ? (
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                   ) : (
-                    <SearchIcon fontSize="small" className="mr-1" />
+                    <RefreshIcon fontSize="small" className="mr-1" />
                   )}
                   {updatingPrices ? "Updating..." : "Update Prices"}
                 </button>
               )}
 
-              {/* Delete All Button */}
+              {/* Update Floats Button */}
               {items.length > 0 && (
                 <button
-                  onClick={() => setDeleteAllConfirm(true)}
-                  className="primary-btn btn-red text-sm px-3 py-1 flex items-center"
-                  disabled={deletingAll}
+                  onClick={handleUpdateFloats}
+                  className="primary-btn btn-black text-sm px-3 py-1 flex items-center"
+                  disabled={updatingFloats || updatingPrices}
                 >
-                  {deletingAll ? (
+                  {updatingFloats ? (
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                   ) : (
-                    <DeleteIcon fontSize="small" className="mr-1" />
+                    <RefreshIcon fontSize="small" className="mr-1" />
                   )}
-                  Clear Inventory
+                  {updatingFloats ? "Updating..." : "Update Float & Pattern"}
                 </button>
               )}
 
               {/* Filter Toggle Button */}
               <button
                 onClick={clearFilters}
-                className="primary-btn btn-secondary text-sm px-3 py-1"
+                className="primary-btn btn-black text-sm px-3 py-1"
                 disabled={
                   !nameFilter &&
                   !rarityFilter &&
@@ -603,6 +780,7 @@ export const SteamInventory: React.FC = () => {
                   sortOrder === "asc"
                 }
               >
+                <DeleteIcon fontSize="small" className="mr-1" />
                 Clear Filters
               </button>
             </div>
@@ -624,7 +802,7 @@ export const SteamInventory: React.FC = () => {
                   value={nameFilter}
                   onChange={(e) => setNameFilter(e.target.value)}
                   placeholder="Filter by name..."
-                  className="w-full px-2 py-1 text-sm border border-primary/20 rounded bg-tertiary text-primary placeholder-muted"
+                  className={inputStyle}
                 />
               </div>
 
@@ -636,7 +814,7 @@ export const SteamInventory: React.FC = () => {
                 <select
                   value={rarityFilter}
                   onChange={(e) => setRarityFilter(e.target.value)}
-                  className="w-full px-2 py-1 text-sm border border-primary/20 rounded bg-tertiary text-primary"
+                  className={inputStyle}
                 >
                   <option value="">All Rarities</option>
                   {uniqueRarities.map((rarity) => (
@@ -646,109 +824,71 @@ export const SteamInventory: React.FC = () => {
                   ))}
                 </select>
               </div>
-
-              {/* Min Price Filter */}
+              {/* Sort By */}
               <div>
                 <label className="block text-xs font-medium text-muted mb-1">
-                  Min Price (€)
+                  Sort By
                 </label>
-                <input
-                  type="number"
-                  value={minPrice}
-                  onChange={(e) => setMinPrice(e.target.value)}
-                  placeholder="0.00"
-                  step="0.01"
-                  min="0"
-                  className="w-full px-2 py-1 text-sm border border-primary/20 rounded bg-tertiary text-primary placeholder-muted"
-                />
+                <select
+                  value={sortBy}
+                  onChange={(e) =>
+                    setSortBy(
+                      e.target.value as "name" | "rarity" | "price" | "profit"
+                    )
+                  }
+                  className={inputStyle}
+                >
+                  <option value="name">Name</option>
+                  <option value="rarity">Rarity</option>
+                  <option value="price">Current Price</option>
+                  <option value="profit">Profit/Loss</option>
+                </select>
               </div>
 
-              {/* Max Price Filter */}
+              {/* Sort Order */}
               <div>
                 <label className="block text-xs font-medium text-muted mb-1">
-                  Max Price (€)
+                  Sort Order
                 </label>
-                <input
-                  type="number"
-                  value={maxPrice}
-                  onChange={(e) => setMaxPrice(e.target.value)}
-                  placeholder="999.99"
-                  step="0.01"
-                  min="0"
-                  className="w-full px-2 py-1 text-sm border border-primary/20 rounded bg-tertiary text-primary placeholder-muted"
-                />
-              </div>
-            </div>
-
-            {/* Sort Controls */}
-            <div className="border-t border-primary/20 pt-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {/* Sort By */}
-                <div>
-                  <label className="block text-xs font-medium text-muted mb-1">
-                    Sort By
-                  </label>
-                  <select
-                    value={sortBy}
-                    onChange={(e) =>
-                      setSortBy(
-                        e.target.value as "name" | "rarity" | "price" | "profit"
-                      )
-                    }
-                    className="w-full px-2 py-1 text-sm border border-primary/20 rounded bg-tertiary text-primary"
-                  >
-                    <option value="name">Name</option>
-                    <option value="rarity">Rarity</option>
-                    <option value="price">Current Price</option>
-                    <option value="profit">Profit/Loss</option>
-                  </select>
-                </div>
-
-                {/* Sort Order */}
-                <div>
-                  <label className="block text-xs font-medium text-muted mb-1">
-                    Sort Order
-                  </label>
-                  <select
-                    value={sortOrder}
-                    onChange={(e) =>
-                      setSortOrder(e.target.value as "asc" | "desc")
-                    }
-                    className="w-full px-2 py-1 text-sm border border-primary/20 rounded bg-tertiary text-primary"
-                  >
-                    <option value="asc">
-                      {sortBy === "name"
-                        ? "A → Z"
-                        : sortBy === "rarity"
-                        ? "Low → High"
-                        : sortBy === "price"
-                        ? "Low → High"
-                        : "Loss → Profit"}
-                    </option>
-                    <option value="desc">
-                      {sortBy === "name"
-                        ? "Z → A"
-                        : sortBy === "rarity"
-                        ? "High → Low"
-                        : sortBy === "price"
-                        ? "High → Low"
-                        : "Profit → Loss"}
-                    </option>
-                  </select>
-                </div>
+                <select
+                  value={sortOrder}
+                  onChange={(e) =>
+                    setSortOrder(e.target.value as "asc" | "desc")
+                  }
+                  className={inputStyle}
+                >
+                  <option value="asc">
+                    {sortBy === "name"
+                      ? "A → Z"
+                      : sortBy === "rarity"
+                      ? "Low → High"
+                      : sortBy === "price"
+                      ? "Low → High"
+                      : "Loss → Profit"}
+                  </option>
+                  <option value="desc">
+                    {sortBy === "name"
+                      ? "Z → A"
+                      : sortBy === "rarity"
+                      ? "High → Low"
+                      : sortBy === "price"
+                      ? "High → Low"
+                      : "Profit → Loss"}
+                  </option>
+                </select>
               </div>
             </div>
 
             {/* Active Filters Display */}
             {(nameFilter ||
               rarityFilter ||
-              minPrice ||
-              maxPrice ||
               sortBy !== "name" ||
               sortOrder !== "asc") && (
               <div className="mt-3 pt-3 border-t border-primary/20">
                 <div className="flex flex-wrap gap-2">
-                  <span className="text-xs text-muted">Active filters:</span>
+                  <span className="text-sm font-bold text-muted">
+                    Active filters:
+                  </span>
                   {nameFilter && (
                     <span className="px-2 py-1 bg-blue/20 text-blue text-xs rounded">
                       Name: "{nameFilter}"
@@ -757,16 +897,6 @@ export const SteamInventory: React.FC = () => {
                   {rarityFilter && (
                     <span className="px-2 py-1 bg-purple/20 text-purple text-xs rounded">
                       Rarity: {rarityFilter}
-                    </span>
-                  )}
-                  {minPrice && (
-                    <span className="px-2 py-1 bg-green/20 text-green text-xs rounded">
-                      Min: €{minPrice}
-                    </span>
-                  )}
-                  {maxPrice && (
-                    <span className="px-2 py-1 bg-green/20 text-green text-xs rounded">
-                      Max: €{maxPrice}
                     </span>
                   )}
                   {(sortBy !== "name" || sortOrder !== "asc") && (
@@ -809,11 +939,11 @@ export const SteamInventory: React.FC = () => {
                 return (
                   <div
                     key={itemId}
-                    className="bg-tertiary rounded-lg border-[1px] border-[var(--border-primary)] overflow-hidden hover:border-primary/40 transition-colors"
+                    className="bg-tertiary rounded-lg border-2 border-[var(--border-secondary)] overflow-hidden transition-colors"
                   >
                     {/* Item Image with Gradient Background */}
                     <div
-                      className="bg-secondary/50 flex items-center justify-center pt-8 pb-2 relative"
+                      className="bg-secondary rounded-md flex items-center justify-center pt-10 pb-0 relative"
                       style={{
                         background: `linear-gradient(to top, ${rarityColor}40 0%, transparent 60%), var(--bg-secondary)`,
                       }}
@@ -867,8 +997,15 @@ export const SteamInventory: React.FC = () => {
                         </div>
                       ) : null}
 
+                      {/* Paint Seed - Show for items that have pattern */}
+                      {item.paint_seed && item.paint_seed > 0 ? (
+                        <div className="text-xs text-muted mb-2">
+                          Pattern: {item.paint_seed}
+                        </div>
+                      ) : null}
+
                       {/* Prices */}
-                      <div className="space-y-1 mb-3">
+                      <div className="space-y-2 mb-3">
                         <div className="flex justify-between items-end text-xs">
                           <span className="text-muted">Current:</span>
                           <span className="text-white font-medium text-2xl">
@@ -880,26 +1017,20 @@ export const SteamInventory: React.FC = () => {
                         <div className="flex justify-between text-xs">
                           <span className="text-muted">Bought:</span>
                           {editingItem === itemId ? (
-                            <div className="flex items-center gap-1">
+                            <div className="flex items-center justify-center">
                               <input
                                 type="number"
                                 value={editPrice}
                                 onChange={(e) => setEditPrice(e.target.value)}
-                                className="w-16 h-5 text-xs px-1 border border-primary/20 rounded bg-tertiary text-primary"
+                                className="max-w-12 h-5 text-xs text-right px-1 border border-primary rounded bg-secondary text-primary mr-1"
                                 step="0.01"
                                 min="0"
                               />
                               <button
                                 onClick={() => handleSavePrice(itemId)}
-                                className="p-1 text-green hover:bg-green/20 rounded"
+                                className="flex justify-center items-center duration-200 w-5 h-5 hover:text-green hover:bg-green/20 bg-secondary border border-primary rounded"
                               >
-                                <SaveIcon fontSize="inherit" />
-                              </button>
-                              <button
-                                onClick={handleCancelEdit}
-                                className="p-1 text-red hover:bg-red/20 rounded"
-                              >
-                                <CancelIcon fontSize="inherit" />
+                                <CheckIcon fontSize="inherit" />
                               </button>
                             </div>
                           ) : (
@@ -912,11 +1043,43 @@ export const SteamInventory: React.FC = () => {
                           )}
                         </div>
 
+                        {/* Overpay - Editable */}
+                        <div className="flex justify-between text-xs">
+                          <span className="text-muted">Overpay:</span>
+                          {editingOverpayItem === itemId ? (
+                            <div className="flex items-center justify-center">
+                              <input
+                                type="number"
+                                value={editOverpay}
+                                onChange={(e) => setEditOverpay(e.target.value)}
+                                className="max-w-12 h-5 text-xs text-right px-1 border border-primary rounded bg-secondary text-primary mr-1"
+                                step="0.01"
+                                min="0"
+                              />
+                              <button
+                                onClick={() => handleSaveOverpay(itemId)}
+                                className="flex justify-center items-center duration-200 w-5 h-5 hover:text-green hover:bg-green/20 bg-secondary border border-primary rounded"
+                              >
+                                <CheckIcon fontSize="inherit" />
+                              </button>
+                            </div>
+                          ) : (
+                            <span
+                              className="text-secondary font-medium"
+                              onClick={() => handleEditOverpay(item)}
+                            >
+                              €{item.overpay?.toFixed(2) || "0.00"}
+                            </span>
+                          )}
+                        </div>
+
                         {/* Profit/Loss */}
                         {(() => {
                           const currentPrice = item.current_price || 0;
                           const boughtPrice = item.price_bought || 0;
-                          const profitLoss = currentPrice - boughtPrice;
+                          const overpay = item.overpay || 0;
+                          const profitLoss =
+                            currentPrice - boughtPrice + overpay;
 
                           return (
                             <div className="flex justify-between text-xs">

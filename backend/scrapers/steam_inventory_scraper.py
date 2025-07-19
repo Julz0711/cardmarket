@@ -31,6 +31,13 @@ from bs4 import BeautifulSoup
 
 from .base_scraper import BaseScraper, ScraperError, ValidationError
 
+# Import CSFloat scraper for float and pattern data
+try:
+    from .csfloat_scraper import CSFloatScraper
+    CSFLOAT_AVAILABLE = True
+except ImportError:
+    CSFLOAT_AVAILABLE = False
+
 # Try to import webdriver_manager, fallback if not available
 try:
     from webdriver_manager.chrome import ChromeDriverManager
@@ -128,6 +135,7 @@ class SteamInventoryScraper(BaseScraper):
         steam_id = kwargs['steam_id']
         app_id = kwargs.get('app_id', '730')  # Default to CS2
         include_floats = kwargs.get('include_floats', True)
+        include_prices = kwargs.get('include_prices', False)  # Include prices is optional
         user_id = kwargs.get('user_id')  # Extract user_id parameter
         
         items = []
@@ -151,22 +159,29 @@ class SteamInventoryScraper(BaseScraper):
                     if self._is_cs2_item(item_data):
                         item = self._process_cs2_item(item_data, steam_id, include_floats, user_id)
                         if item:
-                            # Fetch price info from SkinSearchScraper
-                            price_result = skinsearch.scrape_steam_item(item)
-                            if price_result and isinstance(price_result, dict):
-                                if price_result.get('success') and price_result.get('cheapest_price'):
-                                    item['current_price'] = price_result['cheapest_price']['price']
-                                    item['price_currency'] = price_result['cheapest_price']['currency']
-                                    item['price_details'] = price_result['prices']
-                                    item['skinsearch_url'] = price_result.get('url')
+                            # Fetch price info from SkinSearchScraper if requested
+                            if include_prices:
+                                price_result = skinsearch.scrape_steam_item(item)
+                                if price_result and isinstance(price_result, dict):
+                                    if price_result.get('success') and price_result.get('cheapest_price'):
+                                        item['current_price'] = price_result['cheapest_price']['price']
+                                        item['price_currency'] = price_result['cheapest_price']['currency']
+                                        item['price_details'] = price_result['prices']
+                                        item['skinsearch_url'] = price_result.get('url')
+                                    else:
+                                        item['current_price'] = 0
+                                        item['price_details'] = []
+                                        item['skinsearch_url'] = price_result.get('url') if price_result.get('url') else None
                                 else:
                                     item['current_price'] = 0
                                     item['price_details'] = []
-                                    item['skinsearch_url'] = price_result.get('url') if price_result.get('url') else None
+                                    item['skinsearch_url'] = None
                             else:
+                                # Set default price data when prices not requested
                                 item['current_price'] = 0
                                 item['price_details'] = []
                                 item['skinsearch_url'] = None
+                                
                             items.append(item)
                             self.logger.info(f"Processed item {i+1}/{len(inventory_data)}: {item.get('name', 'Unknown')} (Category: {item.get('item_category', 'unknown')})")
                         else:
@@ -315,7 +330,7 @@ class SteamInventoryScraper(BaseScraper):
         return True
     
     def _process_cs2_item(self, item_data: Dict, steam_id: str, include_floats: bool = True, user_id: str = None) -> Optional[Dict[str, Any]]:
-        """Process a single CS2 inventory item without pricing"""
+        """Process a single CS2 inventory item with optional float data"""
         try:
             # Extract basic item info
             name = item_data.get('market_hash_name', 'Unknown Item')
@@ -333,8 +348,17 @@ class SteamInventoryScraper(BaseScraper):
             if image_url:
                 image_url = f"https://community.akamai.steamstatic.com/economy/image/{image_url}"
             
-            # No float values or pricing - keep it simple
+            # Initialize float and pattern data
             float_value = None
+            paint_seed = None
+            
+            # Get float data if requested and available
+            if include_floats and CSFLOAT_AVAILABLE and self._has_inspect_link(item_data):
+                float_data = self._get_csfloat_data(item_data)
+                if float_data and float_data.success:
+                    float_value = float_data.float_value
+                    paint_seed = float_data.paint_seed
+                    self.logger.info(f"CSFloat data for {name}: Float={float_value}, Pattern={paint_seed}")
             
             # Build the item data
             item_result = {
@@ -343,6 +367,7 @@ class SteamInventoryScraper(BaseScraper):
                 'rarity': rarity,
                 'condition': condition or 'N/A',
                 'float_value': float_value,
+                'paint_seed': paint_seed,
                 'current_price': 0.0,
                 'price_bought': 0.0,
                 'quantity': int(item_data.get('amount', 1)),
@@ -457,6 +482,53 @@ class SteamInventoryScraper(BaseScraper):
                 self.driver.quit()
             except Exception as e:
                 self.logger.warning(f"Error during driver cleanup: {e}")
+        
+        # Clean up CSFloat scraper if it exists
+        if hasattr(self, 'csfloat_scraper') and self.csfloat_scraper is not None:
+            try:
+                self.csfloat_scraper._cleanup()
+            except Exception as e:
+                self.logger.warning(f"Error during CSFloat scraper cleanup: {e}")
+    
+    def _has_inspect_link(self, item_data: Dict) -> bool:
+        """Check if the item has an inspect link available"""
+        actions = item_data.get('actions', [])
+        for action in actions:
+            if 'inspect' in action.get('name', '').lower():
+                return True
+        return False
+    
+    def _get_inspect_link(self, item_data: Dict) -> Optional[str]:
+        """Extract inspect link from item actions"""
+        actions = item_data.get('actions', [])
+        for action in actions:
+            if 'inspect' in action.get('name', '').lower():
+                return action.get('link', '')
+        return None
+    
+    def _get_csfloat_data(self, item_data: Dict) -> Optional[Any]:
+        """Get float and pattern data from CSFloat"""
+        if not CSFLOAT_AVAILABLE:
+            self.logger.warning("CSFloat scraper not available")
+            return None
+        
+        inspect_link = self._get_inspect_link(item_data)
+        if not inspect_link:
+            self.logger.debug(f"No inspect link found for item: {item_data.get('market_hash_name', 'Unknown')}")
+            return None
+        
+        try:
+            # Create CSFloat scraper instance (will reuse driver if possible)
+            if not hasattr(self, 'csfloat_scraper') or self.csfloat_scraper is None:
+                self.csfloat_scraper = CSFloatScraper(headless=self.headless)
+            
+            # Get float data
+            float_data = self.csfloat_scraper.get_float_data(inspect_link)
+            return float_data
+            
+        except Exception as e:
+            self.logger.error(f"Error getting CSFloat data: {e}")
+            return None
     
     def __del__(self):
         """Destructor to ensure cleanup"""

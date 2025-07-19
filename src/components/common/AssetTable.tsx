@@ -18,7 +18,6 @@ interface AssetTableProps {
 const AssetTable: React.FC<AssetTableProps> = ({
   assets,
   assetType,
-  onAssetDelete,
   onSetBuyPrice,
   onDataUpdate,
 }) => {
@@ -52,7 +51,7 @@ const AssetTable: React.FC<AssetTableProps> = ({
 
   const getProfitLossSymbol = (profitLoss: number) => {
     if (profitLoss > 0) return "+";
-    return "";
+    return "-";
   };
 
   const getProfitLossPercentage = (asset: Asset) => {
