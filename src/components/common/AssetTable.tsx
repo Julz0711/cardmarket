@@ -6,6 +6,9 @@ import { apiClient } from "../../api/client";
 import UnfoldMoreIcon from "@mui/icons-material/UnfoldMore";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
+import DeleteIcon from "@mui/icons-material/Delete";
+import CheckIcon from "@mui/icons-material/Check";
+import CloseIcon from "@mui/icons-material/Close";
 
 interface AssetTableProps {
   assets: Asset[];
@@ -40,6 +43,11 @@ const AssetTable: React.FC<AssetTableProps> = ({
     numbers: "",
     headless: true,
   });
+  // Inline buy price editing state
+  const [editingBuyPriceId, setEditingBuyPriceId] = useState<number | null>(
+    null
+  );
+  const [editBuyPriceValue, setEditBuyPriceValue] = useState<string>("");
 
   const formatCurrency = (value: number) => `€${value.toFixed(2)}`;
 
@@ -491,14 +499,14 @@ const AssetTable: React.FC<AssetTableProps> = ({
                 <thead className="bg-tertiary">
                   <tr>
                     <th
-                      className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider cursor-pointer hover:bg-gray-600"
+                      className="px-2 py-3 text-left text-xs font-medium text-muted tracking-wider cursor-pointer hover:bg-gray-600"
                       onClick={() => handleSort("name")}
                     >
                       Name {getSortIcon("name")}
                     </th>
                     {assetType === "cards" && (
                       <th
-                        className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider cursor-pointer hover:bg-gray-600"
+                        className="px-2 py-3 text-left text-xs font-medium text-muted tracking-wider cursor-pointer hover:bg-gray-600"
                         onClick={() => handleSort("tcg" as keyof Asset)}
                       >
                         TCG {getSortIcon("tcg" as keyof Asset)}
@@ -506,7 +514,7 @@ const AssetTable: React.FC<AssetTableProps> = ({
                     )}
                     {assetType === "cards" && (
                       <th
-                        className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider cursor-pointer hover:bg-gray-600"
+                        className="px-2 py-3 text-left text-xs font-medium text-muted tracking-wider cursor-pointer hover:bg-gray-600"
                         onClick={() => handleSort("expansion" as keyof Asset)}
                       >
                         Expansion {getSortIcon("expansion" as keyof Asset)}
@@ -514,37 +522,37 @@ const AssetTable: React.FC<AssetTableProps> = ({
                     )}
                     {(assetType === "stocks" || assetType === "etfs") && (
                       <th
-                        className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider cursor-pointer hover:bg-gray-600"
+                        className="px-2 py-3 text-left text-xs font-medium text-muted tracking-wider cursor-pointer hover:bg-gray-600"
                         onClick={() => handleSort("symbol" as keyof Asset)}
                       >
                         Symbol {getSortIcon("symbol" as keyof Asset)}
                       </th>
                     )}
                     <th
-                      className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider cursor-pointer hover:bg-gray-600"
+                      className="px-2 py-3 text-left text-xs font-medium text-muted tracking-wider cursor-pointer hover:bg-gray-600"
                       onClick={() => handleSort("quantity")}
                     >
                       Quantity {getSortIcon("quantity")}
                     </th>
                     <th
-                      className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider cursor-pointer hover:bg-gray-600"
+                      className="px-2 py-3 text-left text-xs font-medium text-muted tracking-wider cursor-pointer hover:bg-gray-600"
                       onClick={() => handleSort("current_price")}
                     >
                       Current Price {getSortIcon("current_price")}
                     </th>
                     <th
-                      className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider cursor-pointer hover:bg-gray-600"
+                      className="px-2 py-3 text-left text-xs font-medium text-muted tracking-wider cursor-pointer hover:bg-gray-600"
                       onClick={() => handleSort("price_bought")}
                     >
                       Buy Price {getSortIcon("price_bought")}
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
+                    <th className="px-2 py-3 text-left text-xs font-medium text-muted tracking-wider cursor-pointer hover:bg-gray-600">
                       Total Value
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
+                    <th className="px-2 py-3 text-left text-xs font-medium text-muted tracking-wider cursor-pointer hover:bg-gray-600">
                       P&L
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
+                    <th className="px-2 py-3 text-left text-xs font-medium text-muted tracking-wider cursor-pointer hover:bg-gray-600">
                       Actions
                     </th>
                   </tr>
@@ -557,21 +565,21 @@ const AssetTable: React.FC<AssetTableProps> = ({
                     const profitLossPercentage = getProfitLossPercentage(asset);
 
                     return (
-                      <tr key={asset.id} className="hover:bg-tertiary">
-                        <td className="px-6 py-4 whitespace-nowrap">
+                      <tr key={asset.id} className="hover:bg-tertiar">
+                        <td className="px-2 py-4 whitespace-nowrap">
                           <div className="text-sm font-medium text-primary">
                             {asset.name}
                           </div>
                         </td>
                         {assetType === "cards" && "tcg" in asset && (
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td className="px-2 py-4 whitespace-nowrap">
                             <div className="text-sm text-secondary">
                               {asset.tcg}
                             </div>
                           </td>
                         )}
                         {assetType === "cards" && "expansion" in asset && (
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td className="px-2 py-4 whitespace-nowrap">
                             <div className="text-sm text-secondary">
                               {asset.expansion}
                             </div>
@@ -579,33 +587,93 @@ const AssetTable: React.FC<AssetTableProps> = ({
                         )}
                         {(assetType === "stocks" || assetType === "etfs") &&
                           "symbol" in asset && (
-                            <td className="px-6 py-4 whitespace-nowrap">
+                            <td className="px-2 py-4 whitespace-nowrap">
                               <div className="text-sm text-secondary">
                                 {asset.symbol}
                               </div>
                             </td>
                           )}
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-2 py-4 whitespace-nowrap">
                           <div className="text-sm text-secondary">
                             {asset.quantity}
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-2 py-4 whitespace-nowrap">
                           <div className="text-sm text-secondary">
                             {formatCurrency(asset.current_price)}
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-2 py-4 whitespace-nowrap">
                           <div className="text-sm text-secondary">
-                            {formatCurrency(asset.price_bought)}
+                            {onSetBuyPrice && editingBuyPriceId === asset.id ? (
+                              <div className="flex items-center gap-1">
+                                <input
+                                  type="number"
+                                  value={editBuyPriceValue}
+                                  onChange={(e) =>
+                                    setEditBuyPriceValue(e.target.value)
+                                  }
+                                  className="w-20 px-2 py-1 text-sm border border-primary rounded bg-tertiary text-primary text-right"
+                                  step="0.01"
+                                  min="0"
+                                  onBlur={() => {
+                                    if (
+                                      editBuyPriceValue !== "" &&
+                                      !isNaN(parseFloat(editBuyPriceValue))
+                                    ) {
+                                      onSetBuyPrice(
+                                        asset.id,
+                                        parseFloat(editBuyPriceValue)
+                                      );
+                                    }
+                                    setEditingBuyPriceId(null);
+                                  }}
+                                />
+                                <button
+                                  className="ml-1 flex items-center justify-center text-green transition duration-150 rounded p-1 hover:bg-green/30"
+                                  onClick={() => {
+                                    if (
+                                      editBuyPriceValue !== "" &&
+                                      !isNaN(parseFloat(editBuyPriceValue))
+                                    ) {
+                                      onSetBuyPrice(
+                                        asset.id,
+                                        parseFloat(editBuyPriceValue)
+                                      );
+                                    }
+                                    setEditingBuyPriceId(null);
+                                  }}
+                                >
+                                  <CheckIcon fontSize="small" />
+                                </button>
+                                <button
+                                  className="flex items-center justify-center text-red transition duration-150 rounded p-1 hover:bg-red/30"
+                                  onClick={() => setEditingBuyPriceId(null)}
+                                >
+                                  <CloseIcon fontSize="small" />
+                                </button>
+                              </div>
+                            ) : (
+                              <span
+                                className="cursor-pointer hover:underline"
+                                onClick={() => {
+                                  setEditingBuyPriceId(asset.id);
+                                  setEditBuyPriceValue(
+                                    asset.price_bought.toString()
+                                  );
+                                }}
+                              >
+                                {formatCurrency(asset.price_bought)}
+                              </span>
+                            )}
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-2 py-4 whitespace-nowrap">
                           <div className="text-sm font-medium text-primary">
                             {formatCurrency(totalValue)}
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-2 py-4 whitespace-nowrap">
                           <div
                             className={`text-sm font-medium ${getProfitLossColor(
                               profitLoss
@@ -623,22 +691,17 @@ const AssetTable: React.FC<AssetTableProps> = ({
                             {profitLossPercentage.toFixed(2)}%)
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm space-x-2">
+                        <td className="px-2 py-4 flex flex-row flex-nowrap items-center gap-2">
                           {onSetBuyPrice && (
                             <button
+                              className="primary-btn whitespace-nowrap"
                               onClick={() => {
-                                const buyPrice = prompt(
-                                  `Set buy price for ${asset.name}:`,
+                                setEditingBuyPriceId(asset.id);
+                                setEditBuyPriceValue(
                                   asset.price_bought.toString()
                                 );
-                                if (
-                                  buyPrice !== null &&
-                                  !isNaN(parseFloat(buyPrice))
-                                ) {
-                                  onSetBuyPrice(asset.id, parseFloat(buyPrice));
-                                }
                               }}
-                              className="text-green-400 hover:text-green-300 transition-colors"
+                              disabled={editingBuyPriceId === asset.id}
                             >
                               Set Price
                             </button>
@@ -647,9 +710,9 @@ const AssetTable: React.FC<AssetTableProps> = ({
                             onClick={() =>
                               handleDeleteAsset(asset.id, asset.name)
                             }
-                            className="text-red-400 hover:text-red-300 transition-colors"
+                            className="primary-btn btn-red cursor-pointer"
                           >
-                            Delete
+                            <DeleteIcon />
                           </button>
                         </td>
                       </tr>
@@ -777,7 +840,7 @@ const AssetTable: React.FC<AssetTableProps> = ({
                     setShowAddCardModal(false);
                     setAddCardError("");
                   }}
-                  className="px-4 py-2 text-gray-300 hover:text-white transition-colors"
+                  className="primary-btn btn-black"
                 >
                   Cancel
                 </button>

@@ -418,7 +418,8 @@ class SteamInventoryScraper(BaseScraper):
                     'distinguished': 'Distinguished Agent',
                     'exceptional': 'Exceptional Agent',
                     # Other special rarities
-                    'rare': 'Rare',
+                    'industrial grade': 'Industrial Grade',
+                    'rare': 'Industrial Grade',
                     'uncommon': 'Uncommon',
                     'common': 'Common',
                     'legendary': 'Legendary',

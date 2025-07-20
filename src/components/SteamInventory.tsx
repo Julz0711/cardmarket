@@ -419,7 +419,7 @@ export const SteamInventory: React.FC = () => {
       // Legacy agent rarities mapped incorrectly - FIXES for current data
       Legendary: "#eb4b4b", // Actually Master Agent (red) - WRONG in current data
       Mythical: "#8847ff", // Actually Exceptional Agent (purple) - WRONG in current data
-      Rare: "#4b69ff", // Actually Distinguished Agent (blue) - WRONG in current data
+      "Industrial Grade": "#4b69ff", // Actually Distinguished Agent (blue) - WRONG in current data
       Immortal: "#e4ae39",
       // CS2 Agent rarity variations
       "★": "#ffd700", // Special symbol for some agents

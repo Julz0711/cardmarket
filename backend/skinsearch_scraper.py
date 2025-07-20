@@ -43,12 +43,21 @@ class SkinSearchScraper:
         568: "emerald"
     }
 
-    def norm(self, s: str, remove_condition: bool = False, remove_prefix: str = None) -> str:
+    def norm(self, s: str, remove_condition: bool = False, remove_prefix: str = None, for_api_url: bool = False) -> str:
         s = s.lower()
-        s = s.replace('’', '').replace("'", '').replace('"', '')
-        s = s.replace('™', '').replace('★', '').replace('|', '').replace('(', '').replace(')', '')
-        # Only remove non-alphanumeric except _ and -
-        s = re.sub(r'[^a-z0-9_ -]', '', s)
+        
+        if for_api_url:
+            # For API URLs, preserve apostrophes and let URL encoding handle them
+            s = s.replace('™', '').replace('★', '').replace('|', '').replace('(', '').replace(')', '')
+            # Remove non-alphanumeric except apostrophes, underscores, and hyphens
+            s = re.sub(r'[^a-z0-9\' _-]', '', s)
+        else:
+            # Original normalization for display/comparison purposes
+            s = s.replace('"', '')
+            s = s.replace('™', '').replace('★', '').replace('|', '').replace('(', '').replace(')', '')
+            # Only remove non-alphanumeric except _ and -
+            s = re.sub(r"[^a-z0-9_' -]", '', s)
+        
         s = s.replace(' ', '_')  # Only replace spaces with underscores
         # Do NOT replace hyphens
         if remove_prefix and s.startswith(remove_prefix):
