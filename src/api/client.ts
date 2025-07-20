@@ -545,6 +545,109 @@ class ApiClient {
       throw error;
     }
   }
+
+  // Financial Assets (Stocks, ETFs, Crypto) - YFinance Integration
+  async addFinancialAsset(data: {
+    assetType: "stocks" | "etfs" | "crypto";
+    ticker: string;
+    quantity: number;
+  }): Promise<{
+    status: string;
+    message: string;
+    asset: Asset;
+  }> {
+    return this.request(`/financial/${data.assetType}`, {
+      method: "POST",
+      body: JSON.stringify({
+        ticker: data.ticker,
+        quantity: data.quantity,
+      }),
+    });
+  }
+
+  async updateFinancialAssetBoughtPrice(
+    assetType: "stocks" | "etfs" | "crypto",
+    id: number,
+    boughtPrice: number
+  ): Promise<{
+    status: string;
+    message: string;
+    asset: Asset;
+  }> {
+    return this.request(`/financial/${assetType}/${id}/bought-price`, {
+      method: "PUT",
+      body: JSON.stringify({ price_bought: boughtPrice }),
+    });
+  }
+
+  async updateFinancialAssetQuantity(
+    assetType: "stocks" | "etfs" | "crypto",
+    id: number,
+    quantity: number
+  ): Promise<{
+    status: string;
+    message: string;
+    asset: Asset;
+  }> {
+    return this.request(`/financial/${assetType}/${id}/quantity`, {
+      method: "PUT",
+      body: JSON.stringify({ quantity }),
+    });
+  }
+
+  async deleteFinancialAsset(
+    assetType: "stocks" | "etfs" | "crypto",
+    id: number
+  ): Promise<{
+    status: string;
+    message: string;
+  }> {
+    return this.request(`/financial/${assetType}/${id}`, {
+      method: "DELETE",
+    });
+  }
+
+  async deleteAllFinancialAssets(
+    assetType: "stocks" | "etfs" | "crypto"
+  ): Promise<{
+    status: string;
+    message: string;
+    deleted_count: number;
+  }> {
+    return this.request(`/financial/${assetType}`, {
+      method: "DELETE",
+    });
+  }
+
+  async getFinancialAssets(
+    assetType: "stocks" | "etfs" | "crypto"
+  ): Promise<ApiResponse<Asset>> {
+    return this.request<ApiResponse<Asset>>(`/financial/${assetType}`);
+  }
+
+  async refreshFinancialAssetPrices(
+    assetType: "stocks" | "etfs" | "crypto",
+    assetIds?: number[]
+  ): Promise<{
+    status: string;
+    message: string;
+    updated_count: number;
+    failed_count: number;
+    details: {
+      updated: Array<{
+        id: number;
+        name: string;
+        old_price: number;
+        new_price: number;
+      }>;
+      failed: Array<{ id: number; name: string; error: string }>;
+    };
+  }> {
+    return this.request(`/financial/${assetType}/refresh-prices`, {
+      method: "POST",
+      body: JSON.stringify({ asset_ids: assetIds }),
+    });
+  }
 }
 
 export const apiClient = new ApiClient();

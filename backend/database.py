@@ -282,15 +282,75 @@ class CardModel:
                 except Exception as e:
                     logger.warning(f"Failed to get Steam stats: {e}")
             
+            # Get financial assets stats and items if user_id is provided
+            financial_stats = {'stocks': {'value': 0, 'investment': 0, 'count': 0, 'items': []},
+                              'etfs': {'value': 0, 'investment': 0, 'count': 0, 'items': []},
+                              'crypto': {'value': 0, 'investment': 0, 'count': 0, 'items': []}}
+            
+            if user_id:
+                try:
+                    # Use global financial_asset_model instance
+                    global financial_asset_model
+                    if financial_asset_model:
+                        for asset_type in ['stocks', 'etfs', 'crypto']:
+                            assets = financial_asset_model.get_assets_by_type(user_id, asset_type)
+                            total_value = 0
+                            total_investment = 0
+                            for asset in assets:
+                                current_value = asset.get('current_price', 0) * asset.get('quantity', 0)
+                                investment = asset.get('price_bought', 0) * asset.get('quantity', 0)
+                                total_value += current_value
+                                total_investment += investment
+                            
+                            financial_stats[asset_type] = {
+                                'value': total_value,
+                                'investment': total_investment,
+                                'count': len(assets),
+                                'items': assets
+                            }
+                except Exception as e:
+                    logger.warning(f"Failed to get financial assets stats: {e}")
+            
             if not result:
-                # Only Steam items, no cards
-                total_value = steam_stats.get('total_value', 0)
-                total_investment = steam_stats.get('total_bought', 0)
+                # Only Steam items and/or financial assets, no cards
+                steam_value = steam_stats.get('total_value', 0)
+                steam_investment = steam_stats.get('total_bought', 0)
+                
+                # Add financial assets
+                stocks_value = financial_stats['stocks']['value']
+                stocks_investment = financial_stats['stocks']['investment']
+                etfs_value = financial_stats['etfs']['value'] 
+                etfs_investment = financial_stats['etfs']['investment']
+                crypto_value = financial_stats['crypto']['value']
+                crypto_investment = financial_stats['crypto']['investment']
+                
+                total_value = steam_value + stocks_value + etfs_value + crypto_value
+                total_investment = steam_investment + stocks_investment + etfs_investment + crypto_investment
                 profit_loss = total_value - total_investment
                 profit_loss_percentage = (profit_loss / total_investment * 100) if total_investment > 0 else 0
                 
-                # Calculate Steam performers
+                # Calculate performers from all asset types
+                all_performers = []
+                
+                # Steam performers
                 steam_performers = self._calculate_performers(steam_items, 'steam')
+                all_performers.extend(steam_performers['all'])
+                
+                # Financial asset performers
+                for asset_type in ['stocks', 'etfs', 'crypto']:
+                    financial_performers = self._calculate_performers(financial_stats[asset_type]['items'], asset_type)
+                    all_performers.extend(financial_performers['all'])
+                
+                # Sort all performers
+                all_performers.sort(key=lambda x: x['profit_loss_percentage'], reverse=True)
+                top_performers = all_performers[:3]
+                worst_performers = all_performers[-3:] if len(all_performers) >= 3 else []
+                
+                # Calculate percentages
+                steam_percentage = (steam_value / total_value * 100) if total_value > 0 else 0
+                stocks_percentage = (stocks_value / total_value * 100) if total_value > 0 else 0
+                etfs_percentage = (etfs_value / total_value * 100) if total_value > 0 else 0
+                crypto_percentage = (crypto_value / total_value * 100) if total_value > 0 else 0
                 
                 return {
                     'total_portfolio_value': total_value,
@@ -299,13 +359,13 @@ class CardModel:
                     'total_profit_loss_percentage': profit_loss_percentage,
                     'asset_breakdown': {
                         'cards': {'value': 0, 'percentage': 0, 'count': 0},
-                        'steam': {'value': total_value, 'percentage': 100 if total_value > 0 else 0, 'count': steam_stats.get('total_items', 0)},
-                        'stocks': {'value': 0, 'percentage': 0, 'count': 0},
-                        'etfs': {'value': 0, 'percentage': 0, 'count': 0},
-                        'crypto': {'value': 0, 'percentage': 0, 'count': 0}
+                        'steam': {'value': steam_value, 'percentage': steam_percentage, 'count': steam_stats.get('total_items', 0)},
+                        'stocks': {'value': stocks_value, 'percentage': stocks_percentage, 'count': financial_stats['stocks']['count']},
+                        'etfs': {'value': etfs_value, 'percentage': etfs_percentage, 'count': financial_stats['etfs']['count']},
+                        'crypto': {'value': crypto_value, 'percentage': crypto_percentage, 'count': financial_stats['crypto']['count']}
                     },
-                    'top_performers': steam_performers['top'],
-                    'worst_performers': steam_performers['worst']
+                    'top_performers': top_performers,
+                    'worst_performers': worst_performers
                 }
             
             data = result[0]
@@ -314,8 +374,16 @@ class CardModel:
             steam_value = steam_stats.get('total_value', 0)
             steam_investment = steam_stats.get('total_bought', 0)
             
-            total_value = cards_value + steam_value
-            total_investment = cards_investment + steam_investment
+            # Add financial assets
+            stocks_value = financial_stats['stocks']['value']
+            stocks_investment = financial_stats['stocks']['investment']
+            etfs_value = financial_stats['etfs']['value'] 
+            etfs_investment = financial_stats['etfs']['investment']
+            crypto_value = financial_stats['crypto']['value']
+            crypto_investment = financial_stats['crypto']['investment']
+            
+            total_value = cards_value + steam_value + stocks_value + etfs_value + crypto_value
+            total_investment = cards_investment + steam_investment + stocks_investment + etfs_investment + crypto_investment
             profit_loss = total_value - total_investment
             profit_loss_percentage = (profit_loss / total_investment * 100) if total_investment > 0 else 0
             
@@ -331,6 +399,13 @@ class CardModel:
             steam_performers = self._calculate_performers(steam_items, 'steam')
             all_performers.extend(steam_performers['all'])
             logger.info(f"Steam performers found: {len(steam_performers['all'])}")
+            
+            # Add financial asset performers
+            for asset_type in ['stocks', 'etfs', 'crypto']:
+                financial_performers = self._calculate_performers(financial_stats[asset_type]['items'], asset_type)
+                all_performers.extend(financial_performers['all'])
+                logger.info(f"{asset_type.capitalize()} performers found: {len(financial_performers['all'])}")
+            
             logger.info(f"Total performers: {len(all_performers)}")
             
             # Sort all performers by profit/loss percentage
@@ -346,6 +421,9 @@ class CardModel:
             # Calculate asset breakdown percentages
             cards_percentage = (cards_value / total_value * 100) if total_value > 0 else 0
             steam_percentage = (steam_value / total_value * 100) if total_value > 0 else 0
+            stocks_percentage = (stocks_value / total_value * 100) if total_value > 0 else 0
+            etfs_percentage = (etfs_value / total_value * 100) if total_value > 0 else 0
+            crypto_percentage = (crypto_value / total_value * 100) if total_value > 0 else 0
             
             return {
                 'total_portfolio_value': total_value,
@@ -359,9 +437,21 @@ class CardModel:
                         'percentage': cards_percentage,
                         'count': data['total_cards']
                     },
-                    'stocks': {'value': 0, 'percentage': 0, 'count': 0},
-                    'etfs': {'value': 0, 'percentage': 0, 'count': 0},
-                    'crypto': {'value': 0, 'percentage': 0, 'count': 0},
+                    'stocks': {
+                        'value': stocks_value,
+                        'percentage': stocks_percentage,
+                        'count': financial_stats['stocks']['count']
+                    },
+                    'etfs': {
+                        'value': etfs_value,
+                        'percentage': etfs_percentage,
+                        'count': financial_stats['etfs']['count']
+                    },
+                    'crypto': {
+                        'value': crypto_value,
+                        'percentage': crypto_percentage,
+                        'count': financial_stats['crypto']['count']
+                    },
                     'steam': {
                         'value': steam_value,
                         'percentage': steam_percentage,
@@ -653,13 +743,191 @@ class SteamItemModel:
             logger.error(f"Error getting steam stats for user {user_id}: {e}")
             raise
 
+class FinancialAssetModel:
+    """Model for managing financial assets (stocks, ETFs, crypto)"""
+    
+    def __init__(self, db):
+        if db is None:
+            raise ValueError("Database connection required for FinancialAssetModel")
+        self.db = db
+        self.collection = db.financial_assets
+        self.ensure_indexes()
+    
+    def ensure_indexes(self):
+        """Create necessary indexes for better performance"""
+        try:
+            # Create compound index for unique assets per user
+            self.collection.create_index([
+                ("user_id", 1),
+                ("asset_type", 1),
+                ("symbol", 1)
+            ], unique=True)
+            
+            # Index for symbol searches
+            self.collection.create_index([
+                ("symbol", "text"),
+                ("name", "text")
+            ])
+            
+            logger.info("Financial assets collection indexes created successfully")
+        except Exception as e:
+            logger.warning(f"Failed to create financial assets indexes: {e}")
+    
+    def create_asset(self, asset_data: Dict) -> str:
+        """Create a new financial asset"""
+        try:
+            asset_data.update({
+                'created_at': datetime.utcnow(),
+                'updated_at': datetime.utcnow(),
+                'price_history': [{
+                    'price': asset_data.get('current_price', 0),
+                    'date': datetime.utcnow(),
+                    'source': 'yfinance'
+                }]
+            })
+            
+            result = self.collection.insert_one(asset_data)
+            logger.info(f"Created financial asset: {asset_data.get('symbol')} (ID: {result.inserted_id})")
+            return str(result.inserted_id)
+        except DuplicateKeyError:
+            raise ValueError(f"Asset {asset_data.get('symbol')} already exists for this user")
+        except Exception as e:
+            logger.error(f"Error creating financial asset: {e}")
+            raise
+    
+    def get_assets_by_type(self, user_id: str, asset_type: str) -> List[Dict]:
+        """Get all assets of a specific type for a user"""
+        try:
+            assets = list(self.collection.find({
+                'user_id': user_id,
+                'asset_type': asset_type
+            }).sort('symbol', 1))
+            
+            # Convert ObjectId to string
+            for asset in assets:
+                asset['id'] = str(asset['_id'])
+                del asset['_id']
+                asset['type'] = asset_type  # Ensure type field is set
+                
+            return assets
+        except Exception as e:
+            logger.error(f"Error getting {asset_type} for user {user_id}: {e}")
+            raise
+    
+    def get_asset_by_id(self, user_id: str, asset_id: str) -> Optional[Dict]:
+        """Get a specific asset by ID"""
+        try:
+            asset = self.collection.find_one({
+                '_id': ObjectId(asset_id),
+                'user_id': user_id
+            })
+            
+            if asset:
+                asset['id'] = str(asset['_id'])
+                del asset['_id']
+                
+            return asset
+        except Exception as e:
+            logger.error(f"Error getting asset {asset_id}: {e}")
+            return None
+    
+    def update_asset(self, user_id: str, asset_id: str, updates: Dict) -> bool:
+        """Update an asset"""
+        try:
+            updates['updated_at'] = datetime.utcnow()
+            
+            result = self.collection.update_one(
+                {'_id': ObjectId(asset_id), 'user_id': user_id},
+                {'$set': updates}
+            )
+            
+            if result.modified_count > 0:
+                logger.info(f"Updated asset {asset_id}")
+                return True
+            return False
+            
+        except Exception as e:
+            logger.error(f"Error updating asset {asset_id}: {e}")
+            raise
+    
+    def update_price(self, user_id: str, asset_id: str, new_price: float, source: str = 'yfinance') -> bool:
+        """Update asset price and add to price history"""
+        try:
+            # Get current asset
+            asset = self.get_asset_by_id(user_id, asset_id)
+            if not asset:
+                return False
+            
+            # Add to price history
+            price_entry = {
+                'price': new_price,
+                'date': datetime.utcnow(),
+                'source': source
+            }
+            
+            result = self.collection.update_one(
+                {'_id': ObjectId(asset_id), 'user_id': user_id},
+                {
+                    '$set': {
+                        'current_price': new_price,
+                        'updated_at': datetime.utcnow()
+                    },
+                    '$push': {
+                        'price_history': {
+                            '$each': [price_entry],
+                            '$slice': -100  # Keep last 100 price updates
+                        }
+                    }
+                }
+            )
+            
+            return result.modified_count > 0
+            
+        except Exception as e:
+            logger.error(f"Error updating price for asset {asset_id}: {e}")
+            raise
+    
+    def delete_asset(self, user_id: str, asset_id: str) -> bool:
+        """Delete an asset"""
+        try:
+            result = self.collection.delete_one({
+                '_id': ObjectId(asset_id),
+                'user_id': user_id
+            })
+            
+            if result.deleted_count > 0:
+                logger.info(f"Deleted asset {asset_id}")
+                return True
+            return False
+            
+        except Exception as e:
+            logger.error(f"Error deleting asset {asset_id}: {e}")
+            raise
+    
+    def delete_all_assets(self, user_id: str, asset_type: str) -> int:
+        """Delete all assets of a specific type for a user"""
+        try:
+            result = self.collection.delete_many({
+                'user_id': user_id,
+                'asset_type': asset_type
+            })
+            
+            logger.info(f"Deleted {result.deleted_count} {asset_type} for user {user_id}")
+            return result.deleted_count
+            
+        except Exception as e:
+            logger.error(f"Error deleting all {asset_type} for user {user_id}: {e}")
+            raise
+
 # Global database instance
 mongodb = MongoDB()
 if mongodb.connected:
     # Initialize models
     card_model = CardModel(mongodb.db)
     steam_item_model = SteamItemModel(mongodb.db)
+    financial_asset_model = FinancialAssetModel(mongodb.db)
 else:
     card_model = None
     steam_item_model = None
+    financial_asset_model = None
     logger.warning("Models not initialized - MongoDB not available")

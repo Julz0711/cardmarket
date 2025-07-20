@@ -1,0 +1,1246 @@
+import React, { useState, useEffect, memo } from "react";
+import type { Asset } from "../../types/assets";
+import { apiClient } from "../../api/client";
+
+// Material Icons
+import DeleteIcon from "@mui/icons-material/Delete";
+import AddIcon from "@mui/icons-material/Add";
+import CloseIcon from "@mui/icons-material/Close";
+
+interface FinancialAssetTableProps {
+  assets: Asset[];
+  assetType: "stocks" | "etfs" | "crypto";
+  onDataUpdate?: () => void;
+}
+
+const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
+  assets,
+  assetType,
+  onDataUpdate,
+}) => {
+  const [filterText, setFilterText] = useState("");
+
+  // Currency conversion state
+  const [eurRate, setEurRate] = useState<number>(1.0); // Default to 1 for fallback
+  const [currencyError, setCurrencyError] = useState<string>("");
+
+  // Fetch EUR/USD rate on mount
+  useEffect(() => {
+    const fetchRate = async () => {
+      try {
+        // Try jsdelivr first
+        const res = await fetch(
+          "https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json"
+        );
+        if (!res.ok) throw new Error("jsdelivr failed");
+        const data = await res.json();
+        if (data?.usd?.eur) {
+          setEurRate(data.usd.eur);
+          setCurrencyError("");
+          return;
+        }
+        throw new Error("No EUR rate found");
+      } catch (err) {
+        // Fallback to Cloudflare
+        try {
+          const res2 = await fetch(
+            "https://latest.currency-api.pages.dev/v1/currencies/usd.json"
+          );
+          if (!res2.ok) throw new Error("Cloudflare failed");
+          const data2 = await res2.json();
+          if (data2?.usd?.eur) {
+            setEurRate(data2.usd.eur);
+            setCurrencyError("");
+            return;
+          }
+          throw new Error("No EUR rate found");
+        } catch (err2) {
+          setCurrencyError("Failed to fetch EUR/USD rate. Showing USD.");
+          setEurRate(1.0);
+        }
+      }
+    };
+    fetchRate();
+  }, []);
+
+  // Add new asset modal state
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [isAdding, setIsAdding] = useState(false);
+  const [addMessage, setAddMessage] = useState<string>("");
+  const [addError, setAddError] = useState<string>("");
+  const [addFormData, setAddFormData] = useState({
+    ticker: "",
+    quantity: 1,
+    // Purchase history for stocks/ETFs
+    purchases: [] as { quantity: number; price: number; date?: string }[],
+    tempQuantity: "",
+    tempPrice: "",
+  });
+
+  // Edit modal states
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
+  const [editFormData, setEditFormData] = useState({
+    quantity: 0,
+    price_bought: 0,
+    purchases: [] as { quantity: number; price: number; date?: string }[],
+    tempQuantity: "",
+    tempPrice: "",
+  });
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [updateError, setUpdateError] = useState<string>("");
+
+  // Delete states
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteMessage, setDeleteMessage] = useState<string>("");
+  const [deleteError, setDeleteError] = useState<string>("");
+
+  // Format as EUR, fallback to USD if rate not available
+  const formatCurrency = (value: number) => {
+    if (eurRate !== 1.0) {
+      return `€${(value * eurRate).toFixed(2)}`;
+    }
+    return `$${value.toFixed(2)}`;
+  };
+  const formatPercentage = (value: number) =>
+    `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
+
+  const getProfitLossColor = (profitLoss: number) => {
+    if (profitLoss > 0) return "text-green-600";
+    if (profitLoss < 0) return "text-red-600";
+    return "text-gray-600";
+  };
+
+  const getProfitLossSymbol = (profitLoss: number) => {
+    if (profitLoss > 0) return "+";
+    return "";
+  };
+
+  const getTotalItems = () => assets.length;
+
+  const getTotalValue = () => {
+    return assets.reduce(
+      (total, asset) => total + asset.current_price * asset.quantity,
+      0
+    );
+  };
+
+  const getTotalInvestment = () => {
+    return assets.reduce(
+      (total, asset) => total + asset.price_bought * asset.quantity,
+      0
+    );
+  };
+
+  const getTotalProfitLoss = () => {
+    return getTotalValue() - getTotalInvestment();
+  };
+
+  const getTotalProfitLossPercentage = () => {
+    const investment = getTotalInvestment();
+    if (investment === 0) return 0;
+    return (getTotalProfitLoss() / investment) * 100;
+  };
+
+  const handleAddNew = () => {
+    setShowAddModal(true);
+    setAddMessage("");
+    setAddError("");
+    setAddFormData({
+      ticker: "",
+      quantity: 1,
+      purchases: [],
+      tempQuantity: "",
+      tempPrice: "",
+    });
+  };
+
+  const handleAddInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setAddFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  // Purchase step functions for stocks/ETFs
+  const handleAddPurchase = () => {
+    // Parse tempQuantity and tempPrice as float, replacing comma with dot
+    const quantity = parseFloat(
+      (addFormData.tempQuantity + "").replace(",", ".")
+    );
+    const price = parseFloat((addFormData.tempPrice + "").replace(",", "."));
+
+    if (isNaN(quantity) || quantity <= 0 || isNaN(price) || price <= 0) {
+      setAddError("Please enter valid quantity and price");
+      return;
+    }
+
+    const newPurchase = {
+      quantity,
+      price,
+      date: new Date().toISOString().split("T")[0], // Today's date
+    };
+
+    setAddFormData((prev) => ({
+      ...prev,
+      purchases: [...prev.purchases, newPurchase],
+      tempQuantity: "",
+      tempPrice: "",
+    }));
+
+    setAddError("");
+  };
+
+  const handleRemovePurchase = (index: number) => {
+    setAddFormData((prev) => ({
+      ...prev,
+      purchases: prev.purchases.filter((_, i) => i !== index),
+    }));
+  };
+
+  const getTotalQuantity = () => {
+    return addFormData.purchases.reduce(
+      (total, purchase) => total + purchase.quantity,
+      0
+    );
+  };
+
+  const getAveragePrice = () => {
+    if (addFormData.purchases.length === 0) return 0;
+
+    const totalValue = addFormData.purchases.reduce(
+      (total, purchase) => total + purchase.quantity * purchase.price,
+      0
+    );
+    const totalQuantity = getTotalQuantity();
+
+    return totalQuantity > 0 ? totalValue / totalQuantity : 0;
+  };
+
+  const handleAddSubmit = async () => {
+    setIsAdding(true);
+    setAddError("");
+
+    try {
+      if (!addFormData.ticker.trim()) {
+        setAddError("Please enter a ticker symbol");
+        setIsAdding(false);
+        return;
+      }
+
+      // Ensure we have purchase history for all asset types
+      if (addFormData.purchases.length === 0) {
+        setAddError("Please add at least one purchase entry");
+        setIsAdding(false);
+        return;
+      }
+
+      // Use total quantity from purchase history for all asset types
+      const quantity = getTotalQuantity();
+
+      // Call API to add new financial asset with weighted average price
+      const response = await apiClient.addFinancialAsset({
+        assetType,
+        ticker: addFormData.ticker.toUpperCase(),
+        quantity: quantity,
+      });
+
+      // Update the price_bought to the weighted average from our purchase history
+      const averagePrice = getAveragePrice();
+      if (averagePrice > 0 && response.asset && response.asset.id) {
+        await apiClient.updateFinancialAssetBoughtPrice(
+          assetType,
+          response.asset.id,
+          averagePrice
+        );
+      }
+
+      setAddMessage(
+        `Successfully added ${addFormData.ticker.toUpperCase()} to ${assetType}!`
+      );
+      setShowAddModal(false);
+
+      // Reset form on success
+      setAddFormData({
+        ticker: "",
+        quantity: 1,
+        purchases: [],
+        tempQuantity: "",
+        tempPrice: "",
+      }); // Refresh the data
+      if (onDataUpdate) {
+        onDataUpdate();
+      }
+    } catch (error) {
+      setAddError(
+        error instanceof Error ? error.message : `Failed to add ${assetType}`
+      );
+    } finally {
+      setIsAdding(false);
+    }
+  };
+
+  const handleEditAsset = (asset: Asset) => {
+    setEditingAsset(asset);
+
+    // Initialize with current asset data
+    // Since backend doesn't store purchase history yet, create a single entry
+    const singlePurchase = {
+      quantity: asset.quantity,
+      price: asset.price_bought,
+      date: new Date().toISOString().split("T")[0], // Today's date as fallback
+    };
+
+    setEditFormData({
+      quantity: asset.quantity,
+      price_bought: asset.price_bought,
+      purchases: [singlePurchase],
+      tempQuantity: "",
+      tempPrice: "",
+    });
+    setShowEditModal(true);
+    setUpdateError("");
+  };
+
+  const handleEditInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setEditFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  // Edit purchase history functions
+  const handleEditAddPurchase = () => {
+    const quantity = parseFloat(
+      (editFormData.tempQuantity + "").replace(",", ".")
+    );
+    const price = parseFloat((editFormData.tempPrice + "").replace(",", "."));
+
+    if (isNaN(quantity) || quantity <= 0 || isNaN(price) || price <= 0) {
+      setUpdateError("Please enter valid quantity and price");
+      return;
+    }
+
+    const newPurchase = {
+      quantity,
+      price,
+      date: new Date().toISOString().split("T")[0],
+    };
+
+    setEditFormData((prev) => ({
+      ...prev,
+      purchases: [...prev.purchases, newPurchase],
+      tempQuantity: "",
+      tempPrice: "",
+    }));
+
+    setUpdateError("");
+  };
+
+  const handleEditRemovePurchase = (index: number) => {
+    setEditFormData((prev) => ({
+      ...prev,
+      purchases: prev.purchases.filter((_, i) => i !== index),
+    }));
+  };
+
+  const getEditTotalQuantity = () => {
+    return editFormData.purchases.reduce(
+      (total, purchase) => total + purchase.quantity,
+      0
+    );
+  };
+
+  const getEditAveragePrice = () => {
+    if (editFormData.purchases.length === 0) return 0;
+
+    const totalValue = editFormData.purchases.reduce(
+      (total, purchase) => total + purchase.quantity * purchase.price,
+      0
+    );
+    const totalQuantity = getEditTotalQuantity();
+
+    return totalQuantity > 0 ? totalValue / totalQuantity : 0;
+  };
+
+  const handleEditSubmit = async () => {
+    if (!editingAsset) return;
+
+    setIsUpdating(true);
+    setUpdateError("");
+
+    try {
+      if (editFormData.purchases.length === 0) {
+        setUpdateError("Please add at least one purchase entry");
+        setIsUpdating(false);
+        return;
+      }
+
+      const newQuantity = getEditTotalQuantity();
+      const newAveragePrice = getEditAveragePrice();
+
+      // Update quantity if changed
+      if (newQuantity !== editingAsset.quantity) {
+        await apiClient.updateFinancialAssetQuantity(
+          assetType,
+          editingAsset.id,
+          newQuantity
+        );
+      }
+
+      // Update bought price if changed
+      if (newAveragePrice !== editingAsset.price_bought) {
+        await apiClient.updateFinancialAssetBoughtPrice(
+          assetType,
+          editingAsset.id,
+          newAveragePrice
+        );
+      }
+
+      setShowEditModal(false);
+      setEditingAsset(null);
+
+      // Refresh the data
+      if (onDataUpdate) {
+        onDataUpdate();
+      }
+    } catch (error) {
+      setUpdateError(
+        error instanceof Error ? error.message : "Failed to update asset"
+      );
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const getAssetLogo = (asset: Asset) => {
+    const symbol = "symbol" in asset ? asset.symbol : "";
+
+    let logoSymbol = symbol;
+    if (assetType === "crypto") {
+      logoSymbol = symbol.replace(/-usd|-eur/i, "").toLowerCase();
+    } else {
+      logoSymbol = symbol.toUpperCase();
+    }
+    if (!logoSymbol) {
+      logoSymbol = asset.name.replace(/\s+/g, "").toLowerCase();
+    }
+    return `https://api.elbstream.com/logos/symbol/${logoSymbol}`;
+  };
+
+  const getPortfolioPercentage = (asset: Asset) => {
+    const totalPortfolioValue = getTotalValue();
+    if (totalPortfolioValue === 0) return 0;
+
+    const assetValue = asset.current_price * asset.quantity;
+    return (assetValue / totalPortfolioValue) * 100;
+  };
+
+  const handleDeleteAsset = async (id: number, assetName: string) => {
+    if (
+      !window.confirm(
+        `Are you sure you want to delete "${assetName}"? This action cannot be undone.`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      await apiClient.deleteFinancialAsset(assetType, id);
+      if (onDataUpdate) {
+        onDataUpdate();
+      }
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : `Failed to delete ${assetName}`;
+      setDeleteError(errorMessage);
+    }
+  };
+
+  const handleDeleteAll = async () => {
+    if (
+      !window.confirm(
+        `Are you sure you want to delete all ${assets.length} ${assetType}? This action cannot be undone.`
+      )
+    ) {
+      return;
+    }
+
+    setIsDeleting(true);
+    setDeleteMessage("");
+    setDeleteError("");
+
+    try {
+      await apiClient.deleteAllFinancialAssets(assetType);
+      setDeleteMessage(`Successfully deleted all ${assetType}`);
+
+      if (onDataUpdate) {
+        onDataUpdate();
+      }
+    } catch (error) {
+      setDeleteError(
+        error instanceof Error ? error.message : "Failed to delete all assets"
+      );
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const filteredAssets = assets.filter(
+    (asset) =>
+      asset.name.toLowerCase().includes(filterText.toLowerCase()) ||
+      ("symbol" in asset &&
+        asset.symbol.toLowerCase().includes(filterText.toLowerCase()))
+  );
+
+  // Simple sorting by name for pills
+  const sortedAssets = [...filteredAssets].sort((a, b) => {
+    const aSymbol = "symbol" in a ? a.symbol : a.name;
+    const bSymbol = "symbol" in b ? b.symbol : b.name;
+    return aSymbol.localeCompare(bSymbol);
+  });
+
+  const getAssetTypeLabel = () => {
+    switch (assetType) {
+      case "stocks":
+        return "Stocks";
+      case "etfs":
+        return "ETFs";
+      case "crypto":
+        return "Cryptos";
+      default:
+        return assetType;
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Total Summary Section */}
+      {currencyError && (
+        <div className="mb-2 p-2 bg-yellow-900 border border-yellow-700 text-yellow-200 rounded text-sm">
+          {currencyError}
+        </div>
+      )}
+      <div className="card">
+        <div className="card-header">
+          <div className="flex justify-between items-center">
+            <h3 className="text-lg font-semibold text-primary">
+              {getAssetTypeLabel()} Summary
+            </h3>
+            <div className="flex space-x-3">
+              <button
+                onClick={handleAddNew}
+                className="primary-btn btn-green disabled:bg-gray-600 disabled:cursor-not-allowed"
+              >
+                <AddIcon className="mr-2" fontSize="small" />
+                Add New {getAssetTypeLabel().slice(0, -1)}
+              </button>
+              <button
+                onClick={handleDeleteAll}
+                disabled={isDeleting || assets.length === 0}
+                className="primary-btn btn-red disabled:bg-gray-600 disabled:cursor-not-allowed"
+              >
+                {isDeleting ? "Deleting..." : "Delete All"}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="card-body">
+          {/* Status messages */}
+          {addMessage && (
+            <div className="mb-4 p-4 bg-green-800 border border-green-600 text-green-200 rounded">
+              {addMessage}
+            </div>
+          )}
+          {addError && (
+            <div className="mb-4 p-4 bg-red-800 border border-red-600 text-red-200 rounded">
+              {addError}
+            </div>
+          )}
+          {deleteMessage && (
+            <div className="mb-4 p-4 bg-green-800 border border-green-600 text-green-200 rounded">
+              {deleteMessage}
+            </div>
+          )}
+          {deleteError && (
+            <div className="mb-4 p-4 bg-red-800 border border-red-600 text-red-200 rounded">
+              {deleteError}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="stats-card">
+              <div className="text-sm font-medium text-secondary">
+                Total Items
+              </div>
+              <div className="text-2xl font-bold text-primary">
+                {getTotalItems()}
+              </div>
+            </div>
+            <div className="stats-card">
+              <div className="text-sm font-medium text-secondary">
+                Total Value
+              </div>
+              <div className="text-2xl font-bold text-primary">
+                {formatCurrency(getTotalValue())}
+              </div>
+            </div>
+            <div className="stats-card">
+              <div className="text-sm font-medium text-secondary">
+                Total Investment
+              </div>
+              <div className="text-2xl font-bold text-primary">
+                {formatCurrency(getTotalInvestment())}
+              </div>
+            </div>
+            <div className="stats-card">
+              <div className="text-sm font-medium text-secondary">
+                Total P&L
+              </div>
+              <div
+                className={`text-2xl font-bold ${getProfitLossColor(
+                  getTotalProfitLoss()
+                )}`}
+              >
+                {getProfitLossSymbol(getTotalProfitLoss())}
+                {formatCurrency(Math.abs(getTotalProfitLoss()))}
+                <div className="text-sm font-normal">
+                  ({formatPercentage(getTotalProfitLossPercentage())})
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Modern Asset Pills */}
+      <div className="card">
+        <div className="card-header">
+          <div className="flex justify-between items-center">
+            <h3 className="text-lg font-medium text-primary">
+              {getAssetTypeLabel()} ({assets.length})
+            </h3>
+            <input
+              type="text"
+              placeholder={`Filter ${assetType}...`}
+              value={filterText}
+              onChange={(e) => setFilterText(e.target.value)}
+              className="border border-primary bg-tertiary text-primary rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-secondary"
+            />
+          </div>
+        </div>
+
+        <div className="card-body">
+          {sortedAssets.length === 0 ? (
+            <div className="px-6 py-8 text-center text-secondary">
+              {filterText
+                ? `No ${assetType} found matching "${filterText}"`
+                : `No ${assetType} found`}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {sortedAssets.map((asset) => {
+                const totalValue = asset.current_price * asset.quantity;
+                const totalInvestment = asset.price_bought * asset.quantity;
+                const profitLoss = totalValue - totalInvestment;
+                const profitLossPercentage =
+                  totalInvestment > 0
+                    ? (profitLoss / totalInvestment) * 100
+                    : 0;
+                const change24h =
+                  "change_24h" in asset ? (asset as any).change_24h : 0;
+                const portfolioPercentage = getPortfolioPercentage(asset);
+                const symbol = "symbol" in asset ? asset.symbol : "";
+
+                // Determine background gradient based on 24h change
+                const gradientClass =
+                  change24h >= 0
+                    ? "bg-gradient-to-r from-40% from-dark to-green/40"
+                    : "bg-gradient-to-r from-40% from-dark to-red/40";
+
+                return (
+                  <div key={asset.id} className="flex items-center space-x-3">
+                    <div
+                      className={`flex items-center justify-between ${gradientClass} border border-primary rounded-xl px-4 py-2 flex-1`}
+                    >
+                      {/* Left Section: Logo & Asset Info */}
+                      <div className="flex items-center space-x-4 flex-1">
+                        {/* Asset Logo */}
+                        <div className="w-12 h-12 bg-secondary border border-primary rounded-full flex items-center justify-center overflow-hidden">
+                          <img
+                            src={getAssetLogo(asset)}
+                            alt={symbol}
+                            className="w-10 h-10 rounded-full object-cover"
+                            onError={(e) => {
+                              // Fallback to first 3 letters if image fails to load
+                              const target = e.target as HTMLImageElement;
+                              target.style.display = "none";
+                              target.parentElement!.innerHTML = `<span class="text-sm font-bold text-white">${symbol
+                                .slice(0, 3)
+                                .toUpperCase()}</span>`;
+                            }}
+                          />
+                        </div>
+
+                        {/* Asset Details */}
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-4">
+                            {/* Ticker Symbol */}
+                            <div className="text-lg font-bold text-white">
+                              {symbol}
+                            </div>
+
+                            {/* Current Price */}
+                            <div className="text-lg text-gray-300">
+                              {formatCurrency(asset.current_price)}
+                            </div>
+
+                            {/* 24h Change */}
+                            <div
+                              className={`text-[10px] font-medium px-2 py-1 rounded-full ${
+                                change24h >= 0
+                                  ? "bg-green/30 text-green-400"
+                                  : "bg-red/30 text-red-400"
+                              }`}
+                            >
+                              {formatPercentage(change24h)}
+                            </div>
+                          </div>
+
+                          {/* Portfolio Percentage Bar - Made smaller */}
+                          <div className="flex items-center mt-1 space-x-2">
+                            <div className="w-48 bg-gray-700 rounded-full h-1.5 overflow-hidden">
+                              <div
+                                className="h-full bg-blue"
+                                style={{
+                                  width: `${Math.min(
+                                    portfolioPercentage,
+                                    100
+                                  )}%`,
+                                }}
+                              />
+                            </div>
+                            <div className="text-xs text-gray-400 min-w-[3rem] text-left">
+                              {portfolioPercentage.toFixed(1)}%
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Right Section: Total Value */}
+                      <div className="text-right">
+                        <div className="text-xl font-bold text-white">
+                          {formatCurrency(totalValue)}
+                        </div>
+                        <div
+                          className={`text-sm ${getProfitLossColor(
+                            profitLoss
+                          )}`}
+                        >
+                          {getProfitLossSymbol(profitLoss)}
+                          {formatCurrency(Math.abs(profitLoss))}
+                          <span className="text-xs ml-1">
+                            ({formatPercentage(profitLossPercentage)})
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Edit Button - Outside the pill */}
+                    <button
+                      onClick={() => handleEditAsset(asset)}
+                      className="primary-btn btn-black"
+                    >
+                      Edit
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Edit Asset Modal */}
+      {showEditModal && editingAsset && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-primary rounded-lg p-6 w-full max-w-md mx-4 border border-primary">
+            <h3 className="text-lg font-semibold text-white mb-4">
+              Edit{" "}
+              {"symbol" in editingAsset
+                ? editingAsset.symbol
+                : editingAsset.name}
+            </h3>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleEditSubmit();
+              }}
+            >
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <div className="text-sm font-medium text-gray-300">
+                    Purchase History
+                  </div>
+
+                  {/* Add new purchase section */}
+                  <div className="bg-tertiary p-4 rounded-md border border-primary">
+                    <div className="grid grid-cols-2 gap-3 mb-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-400 mb-2">
+                          {assetType === "crypto" ? "Quantity" : "Shares"}
+                        </label>
+                        <input
+                          type="text"
+                          name="tempQuantity"
+                          value={editFormData.tempQuantity || ""}
+                          onChange={handleEditInputChange}
+                          placeholder={assetType === "crypto" ? "0.001" : "10"}
+                          className="w-full border border-primary bg-primary text-white rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue placeholder-gray-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-400 mb-2">
+                          {assetType === "crypto"
+                            ? "Price per Unit (€)"
+                            : "Price per Share (€)"}
+                        </label>
+                        <input
+                          type="text"
+                          name="tempPrice"
+                          value={editFormData.tempPrice || ""}
+                          onChange={handleEditInputChange}
+                          placeholder={
+                            assetType === "crypto" ? "50000.00" : "150.00"
+                          }
+                          className="w-full border border-primary bg-primary text-white rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue placeholder-gray-500"
+                        />
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleEditAddPurchase}
+                      className="primary-btn"
+                    >
+                      Add Purchase
+                    </button>
+                  </div>
+
+                  {/* Purchase history list */}
+                  {editFormData.purchases.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="text-xs font-medium text-gray-400">
+                        Purchase Entries ({editFormData.purchases.length})
+                      </div>
+                      <div className="max-h-32 overflow-y-auto space-y-1">
+                        {editFormData.purchases.map((purchase, index) => (
+                          <div
+                            key={index}
+                            className="bg-tertiary p-2 rounded-md text-xs flex justify-between items-center"
+                          >
+                            <div className="text-gray-300">
+                              <span className="font-bold">
+                                {purchase.quantity}
+                              </span>{" "}
+                              {assetType === "crypto" ? "units" : "shares"} @{" "}
+                              <span className="font-bold">
+                                {purchase.price.toFixed(2)}€
+                              </span>
+                              {purchase.date && (
+                                <span className="text-gray-400 ml-2">
+                                  ({purchase.date})
+                                </span>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleEditRemovePurchase(index)}
+                              className="bg-red-600 hover:bg-red-700 text-white rounded-md p-1 flex items-center justify-center transition-colors"
+                            >
+                              <CloseIcon fontSize="inherit" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Summary */}
+                      <div className="bg-tertiary p-2 rounded-md text-xs text-gray-300">
+                        <div>
+                          Total Quantity:{" "}
+                          <span className="font-bold">
+                            {getEditTotalQuantity()}
+                          </span>
+                        </div>
+                        <div>
+                          Average Price:{" "}
+                          <span className="font-bold">
+                            {getEditAveragePrice().toFixed(2)}€
+                          </span>
+                        </div>
+                        <div>
+                          Total Investment:{" "}
+                          <span className="font-bold">
+                            {(
+                              getEditTotalQuantity() * getEditAveragePrice()
+                            ).toFixed(2)}
+                            €
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {updateError && (
+                <div className="mt-4 p-3 bg-red-800 border border-red-600 text-red-200 rounded text-sm">
+                  {updateError}
+                </div>
+              )}
+
+              <div className="flex justify-between items-center mt-6">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (
+                      editingAsset &&
+                      window.confirm(
+                        `Are you sure you want to delete "${editingAsset.name}"? This action cannot be undone.`
+                      )
+                    ) {
+                      handleDeleteAsset(editingAsset.id, editingAsset.name);
+                      setShowEditModal(false);
+                      setEditingAsset(null);
+                    }
+                  }}
+                  className="primary-btn btn-red"
+                >
+                  <DeleteIcon className="mr-2" fontSize="small" />
+                  Delete Asset
+                </button>
+
+                <div className="flex space-x-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowEditModal(false);
+                      setEditingAsset(null);
+                      setUpdateError("");
+                    }}
+                    className="primary-btn btn-black"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isUpdating}
+                    className="primary-btn btn-green disabled:bg-gray-600 disabled:cursor-not-allowed"
+                  >
+                    {isUpdating ? "Saving..." : "Save Changes"}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-primary rounded-lg p-6 w-full max-w-md mx-4 border border-primary">
+            <h3 className="text-lg font-semibold text-white mb-4">
+              Add New {getAssetTypeLabel().slice(0, -1)}
+            </h3>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleAddSubmit();
+              }}
+            >
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Ticker Symbol
+                  </label>
+                  <input
+                    type="text"
+                    name="ticker"
+                    value={addFormData.ticker}
+                    onChange={handleAddInputChange}
+                    placeholder={
+                      assetType === "stocks"
+                        ? "e.g., NVDA, AAPL"
+                        : assetType === "etfs"
+                        ? "e.g., SPY, QQQ"
+                        : "e.g., BTC-USD, ETH-USD"
+                    }
+                    autoComplete="off"
+                    className="w-full border border-primary bg-tertiary text-white rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue placeholder-gray-400"
+                  />
+                </div>
+
+                {assetType === "crypto" ? (
+                  // Simple quantity input for crypto
+                  <div className="space-y-2">
+                    <div className="text-sm font-medium text-gray-300">
+                      Purchase History
+                    </div>
+
+                    {/* Add new purchase section */}
+                    <div className="bg-tertiary p-4 rounded-md border border-primary">
+                      <div className="grid grid-cols-2 gap-3 mb-3">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-400 mb-2">
+                            Quantity
+                          </label>
+                          <input
+                            type="text"
+                            name="tempQuantity"
+                            value={addFormData.tempQuantity || ""}
+                            onChange={handleAddInputChange}
+                            placeholder="0.001"
+                            className="w-full border border-primary bg-primary text-white rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue placeholder-gray-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-400 mb-2">
+                            Price per Unit (€)
+                          </label>
+                          <input
+                            type="text"
+                            name="tempPrice"
+                            value={addFormData.tempPrice || ""}
+                            onChange={handleAddInputChange}
+                            placeholder="50000.00"
+                            className="w-full border border-primary bg-primary text-white rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue placeholder-gray-500"
+                          />
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleAddPurchase}
+                        className="primary-btn btn-blue text-xs py-1 px-3"
+                      >
+                        Add Purchase
+                      </button>
+                    </div>
+
+                    {/* Purchase history list */}
+                    {addFormData.purchases.length > 0 && (
+                      <div className="space-y-2">
+                        <div className="text-xs font-medium text-gray-400">
+                          Purchase Entries ({addFormData.purchases.length})
+                        </div>
+                        <div className="max-h-32 overflow-y-auto space-y-1">
+                          {addFormData.purchases.map((purchase, index) => (
+                            <div
+                              key={index}
+                              className="bg-secondary p-2 rounded text-xs flex justify-between items-center"
+                            >
+                              <div className="text-gray-300">
+                                <span className="font-bold">
+                                  {purchase.quantity}
+                                </span>{" "}
+                                units @{" "}
+                                <span className="font-bold">
+                                  {purchase.price.toFixed(2)}€
+                                </span>
+                                {purchase.date && (
+                                  <span className="text-muted ml-2">
+                                    ({purchase.date})
+                                  </span>
+                                )}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleRemovePurchase(index)}
+                                className="bg-red border-2 border-red text-white rounded-md p-1 flex items-center justify-center hover:bg-black hover:text-red transition-colors"
+                              >
+                                <CloseIcon fontSize="inherit" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Summary */}
+                        <div className="bg-primary p-2 rounded text-xs text-gray-300">
+                          <div>
+                            Total Quantity:{" "}
+                            <span className="font-bold">
+                              {getTotalQuantity()}
+                            </span>
+                          </div>
+                          <div>
+                            Average Price:{" "}
+                            <span className="font-bold">
+                              {getAveragePrice().toFixed(2)}€
+                            </span>
+                          </div>
+                          <div>
+                            Total Investment:{" "}
+                            <span className="font-bold">
+                              {(getTotalQuantity() * getAveragePrice()).toFixed(
+                                2
+                              )}
+                              €
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  // Purchase history system for stocks/ETFs
+                  <div className="space-y-2">
+                    <div className="text-sm font-medium text-gray-300">
+                      Purchase History
+                    </div>
+
+                    {/* Add new purchase section */}
+                    <div className="bg-tertiary p-4 rounded-md border border-primary">
+                      <div className="grid grid-cols-2 gap-3 mb-3">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-400 mb-2">
+                            Quantity
+                          </label>
+                          <input
+                            type="text"
+                            name="tempQuantity"
+                            value={addFormData.tempQuantity || ""}
+                            onChange={handleAddInputChange}
+                            placeholder="10"
+                            className="w-full border border-primary bg-primary text-white rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue placeholder-gray-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-400 mb-2">
+                            Price per Share (€)
+                          </label>
+                          <input
+                            type="text"
+                            name="tempPrice"
+                            value={addFormData.tempPrice || ""}
+                            onChange={handleAddInputChange}
+                            placeholder="150.00"
+                            className="w-full border border-primary bg-primary text-white rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue placeholder-gray-500"
+                          />
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleAddPurchase}
+                        className="primary-btn btn-blue text-xs py-1 px-3"
+                      >
+                        Add Purchase
+                      </button>
+                    </div>
+
+                    {/* Purchase history list */}
+                    {addFormData.purchases.length > 0 && (
+                      <div className="space-y-2">
+                        <div className="text-xs font-medium text-gray-400">
+                          Purchase Entries ({addFormData.purchases.length})
+                        </div>
+                        <div className="max-h-32 overflow-y-auto space-y-1">
+                          {addFormData.purchases.map((purchase, index) => (
+                            <div
+                              key={index}
+                              className="bg-secondary p-2 rounded text-xs flex justify-between items-center"
+                            >
+                              <div className="text-gray-300">
+                                <span className="font-bold">
+                                  {purchase.quantity}
+                                </span>{" "}
+                                shares @{" "}
+                                <span className="font-bold">
+                                  {purchase.price.toFixed(2)}€
+                                </span>
+                                {purchase.date && (
+                                  <span className="text-muted ml-2">
+                                    ({purchase.date})
+                                  </span>
+                                )}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleRemovePurchase(index)}
+                                className="bg-red border-2 border-red text-white rounded-md p-1 flex items-center justify-center hover:bg-black hover:text-red transition-colors"
+                              >
+                                <CloseIcon fontSize="inherit" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Summary */}
+                        <div className="bg-primary p-2 rounded text-xs text-gray-300">
+                          <div>
+                            Total Quantity:{" "}
+                            <span className="font-bold">
+                              {getTotalQuantity()}
+                            </span>
+                          </div>
+                          <div>
+                            Average Price:{" "}
+                            <span className="font-bold">
+                              {getAveragePrice().toFixed(2)}€
+                            </span>
+                          </div>
+                          <div>
+                            Total Investment:{" "}
+                            <span className="font-bold">
+                              {(getTotalQuantity() * getAveragePrice()).toFixed(
+                                2
+                              )}
+                              €
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {addError && (
+                <div className="mt-4 p-3 bg-red-800 border border-red text-red-200 rounded text-sm">
+                  {addError}
+                </div>
+              )}
+
+              <div className="flex justify-end space-x-3 mt-6">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAddModal(false);
+                    setAddError("");
+                  }}
+                  className="primary-btn btn-black"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isAdding}
+                  className="primary-btn btn-green disabled:bg-gray-600 disabled:cursor-not-allowed"
+                >
+                  {isAdding
+                    ? "Adding..."
+                    : `Add ${getAssetTypeLabel().slice(0, -1)}`}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default memo(FinancialAssetTable);

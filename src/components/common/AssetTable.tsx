@@ -731,7 +731,7 @@ const AssetTable: React.FC<AssetTableProps> = ({
           key="add-card-modal"
           className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
         >
-          <div className="bg-gray-800 rounded-lg p-6 w-full max-w-md mx-4 border border-gray-600">
+          <div className="bg-primary rounded-lg p-6 w-full max-w-md mx-4 border border-primary">
             <h3 className="text-lg font-semibold text-white mb-4">
               Add New Cards
             </h3>
@@ -754,7 +754,7 @@ const AssetTable: React.FC<AssetTableProps> = ({
                     name="tcg"
                     value={addCardFormData.tcg}
                     onChange={handleAddCardInputChange}
-                    className="w-full border border-gray-600 bg-gray-700 text-white rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full border border-primary bg-tertiary text-white rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue placeholder-gray-400"
                   >
                     <option value="Pokemon">Pokemon</option>
                     <option value="Magic">Magic: The Gathering</option>
@@ -780,7 +780,7 @@ const AssetTable: React.FC<AssetTableProps> = ({
                     onChange={handleAddCardInputChange}
                     placeholder="e.g., Stellar Crown"
                     autoComplete="off"
-                    className="w-full border border-gray-600 bg-gray-700 text-white rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400"
+                    className="w-full border border-primary bg-tertiary text-white rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue placeholder-gray-400"
                     key="expansion-input"
                   />
                 </div>
@@ -800,7 +800,7 @@ const AssetTable: React.FC<AssetTableProps> = ({
                     onChange={handleAddCardInputChange}
                     placeholder="e.g., 170, 135, 152, 108"
                     autoComplete="off"
-                    className="w-full border border-gray-600 bg-gray-700 text-white rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400"
+                    className="w-full border border-primary bg-tertiary text-white rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue placeholder-gray-400"
                     key="numbers-input"
                   />
                   <p className="text-xs text-gray-400 mt-1">

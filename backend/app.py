@@ -13,7 +13,10 @@ from scrapers import ScraperManager, ScraperError, ValidationError
 from scrapers.skinsnipe_scraper import SkinSnipeScraper
 
 # Import MongoDB database models
-from database import mongodb, card_model, steam_item_model
+from database import mongodb, card_model, steam_item_model, financial_asset_model
+
+# Import yfinance service
+from yfinance_service import yfinance_service
 
 # Import authentication system
 from auth import user_model, auth_required, optional_auth, JWTManager
@@ -542,6 +545,348 @@ def not_found(error):
 @app.errorhandler(500)
 def internal_error(error):
     return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
+
+# ============================================================================
+# FINANCIAL ASSETS ENDPOINTS (Stocks, ETFs, Crypto) - YFinance Integration
+# ============================================================================
+
+@app.route('/api/financial/<asset_type>', methods=['GET'])
+@auth_required
+def get_financial_assets(asset_type):
+    """Get all financial assets of a specific type for the current user"""
+    try:
+        # Validate asset type
+        if asset_type not in ['stocks', 'etfs', 'crypto']:
+            return jsonify({'status': 'error', 'message': 'Invalid asset type'}), 400
+        
+        if not financial_asset_model:
+            return jsonify({'status': 'error', 'message': 'Database not available'}), 500
+        
+        user_id = request.current_user['user_id']
+        assets = financial_asset_model.get_assets_by_type(user_id, asset_type)
+        
+        return jsonify({
+            'status': 'success',
+            'items': assets,
+            'total': len(assets),
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting {asset_type}: {e}")
+        return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
+
+@app.route('/api/financial/<asset_type>', methods=['POST'])
+@auth_required
+def add_financial_asset(asset_type):
+    """Add a new financial asset using yfinance data"""
+    try:
+        # Validate asset type
+        if asset_type not in ['stocks', 'etfs', 'crypto']:
+            return jsonify({'status': 'error', 'message': 'Invalid asset type'}), 400
+        
+        if not financial_asset_model:
+            return jsonify({'status': 'error', 'message': 'Database not available'}), 500
+        
+        data = request.get_json()
+        ticker = data.get('ticker', '').strip().upper()
+        quantity = float(data.get('quantity', 1))
+        
+        if not ticker:
+            return jsonify({'status': 'error', 'message': 'Ticker symbol is required'}), 400
+        
+        if quantity <= 0:
+            return jsonify({'status': 'error', 'message': 'Quantity must be greater than 0'}), 400
+        
+        # Get asset info from yfinance
+        asset_info = yfinance_service.get_asset_info(ticker, asset_type)
+        
+        if not asset_info:
+            return jsonify({
+                'status': 'error', 
+                'message': f'Could not find asset data for {ticker}. Please check the symbol.'
+            }), 404
+        
+        # Prepare asset data for database
+        user_id = request.current_user['user_id']
+        asset_data = {
+            'user_id': user_id,
+            'asset_type': asset_type,
+            'symbol': asset_info['symbol'],
+            'name': asset_info['name'],
+            'current_price': asset_info['current_price'],
+            'price_bought': asset_info['current_price'],  # Default to current price
+            'quantity': quantity,
+            'change_24h': asset_info.get('change_24h', 0),
+        }
+        
+        # Add type-specific fields
+        if asset_type == 'stocks':
+            asset_data.update({
+                'company': asset_info.get('company', ''),
+                'sector': asset_info.get('sector', ''),
+                'market': asset_info.get('market', ''),
+                'dividend_yield': asset_info.get('dividend_yield', 0)
+            })
+        elif asset_type == 'etfs':
+            asset_data.update({
+                'fund_name': asset_info.get('fund_name', ''),
+                'expense_ratio': asset_info.get('expense_ratio', 0),
+                'category': asset_info.get('category', ''),
+                'dividend_yield': asset_info.get('dividend_yield', 0)
+            })
+        elif asset_type == 'crypto':
+            asset_data.update({
+                'market_cap': asset_info.get('market_cap', 0),
+                'volume_24h': asset_info.get('volume_24h', 0)
+            })
+        
+        # Save to database
+        asset_id = financial_asset_model.create_asset(asset_data)
+        
+        # Get the created asset
+        created_asset = financial_asset_model.get_asset_by_id(user_id, asset_id)
+        
+        return jsonify({
+            'status': 'success',
+            'message': f'Successfully added {ticker} to {asset_type}',
+            'asset': created_asset
+        })
+        
+    except ValueError as e:
+        logger.warning(f"Validation error adding {asset_type}: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 400
+    except Exception as e:
+        logger.error(f"Error adding {asset_type}: {e}")
+        return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
+
+@app.route('/api/financial/<asset_type>/<asset_id>/bought-price', methods=['PUT'])
+@auth_required
+def update_bought_price(asset_type, asset_id):
+    """Update the bought price for a financial asset"""
+    try:
+        if asset_type not in ['stocks', 'etfs', 'crypto']:
+            return jsonify({'status': 'error', 'message': 'Invalid asset type'}), 400
+        
+        if not financial_asset_model:
+            return jsonify({'status': 'error', 'message': 'Database not available'}), 500
+        
+        data = request.get_json()
+        price_bought = float(data.get('price_bought', 0))
+        
+        if price_bought <= 0:
+            return jsonify({'status': 'error', 'message': 'Bought price must be greater than 0'}), 400
+        
+        user_id = request.current_user['user_id']
+        
+        # Update the asset
+        success = financial_asset_model.update_asset(user_id, asset_id, {
+            'price_bought': price_bought
+        })
+        
+        if not success:
+            return jsonify({'status': 'error', 'message': 'Asset not found'}), 404
+        
+        # Get updated asset
+        updated_asset = financial_asset_model.get_asset_by_id(user_id, asset_id)
+        
+        return jsonify({
+            'status': 'success',
+            'message': f'Updated bought price to ${price_bought:.2f}',
+            'asset': updated_asset
+        })
+        
+    except Exception as e:
+        logger.error(f"Error updating bought price: {e}")
+        return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
+
+@app.route('/api/financial/<asset_type>/<asset_id>/quantity', methods=['PUT'])
+@auth_required
+def update_quantity(asset_type, asset_id):
+    """Update the quantity for a financial asset"""
+    try:
+        if asset_type not in ['stocks', 'etfs', 'crypto']:
+            return jsonify({'status': 'error', 'message': 'Invalid asset type'}), 400
+        
+        if not financial_asset_model:
+            return jsonify({'status': 'error', 'message': 'Database not available'}), 500
+        
+        data = request.get_json()
+        quantity = float(data.get('quantity', 0))
+        
+        if quantity <= 0:
+            return jsonify({'status': 'error', 'message': 'Quantity must be greater than 0'}), 400
+        
+        user_id = request.current_user['user_id']
+        
+        # Update the asset
+        success = financial_asset_model.update_asset(user_id, asset_id, {
+            'quantity': quantity
+        })
+        
+        if not success:
+            return jsonify({'status': 'error', 'message': 'Asset not found'}), 404
+        
+        # Get updated asset
+        updated_asset = financial_asset_model.get_asset_by_id(user_id, asset_id)
+        
+        return jsonify({
+            'status': 'success',
+            'message': f'Updated quantity to {quantity}',
+            'asset': updated_asset
+        })
+        
+    except Exception as e:
+        logger.error(f"Error updating quantity: {e}")
+        return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
+
+@app.route('/api/financial/<asset_type>/<asset_id>', methods=['DELETE'])
+@auth_required
+def delete_financial_asset(asset_type, asset_id):
+    """Delete a financial asset"""
+    try:
+        if asset_type not in ['stocks', 'etfs', 'crypto']:
+            return jsonify({'status': 'error', 'message': 'Invalid asset type'}), 400
+        
+        if not financial_asset_model:
+            return jsonify({'status': 'error', 'message': 'Database not available'}), 500
+        
+        user_id = request.current_user['user_id']
+        
+        # Get asset info before deleting
+        asset = financial_asset_model.get_asset_by_id(user_id, asset_id)
+        if not asset:
+            return jsonify({'status': 'error', 'message': 'Asset not found'}), 404
+        
+        # Delete the asset
+        success = financial_asset_model.delete_asset(user_id, asset_id)
+        
+        if not success:
+            return jsonify({'status': 'error', 'message': 'Failed to delete asset'}), 500
+        
+        return jsonify({
+            'status': 'success',
+            'message': f'Successfully deleted {asset["symbol"]}'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error deleting financial asset: {e}")
+        return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
+
+@app.route('/api/financial/<asset_type>', methods=['DELETE'])
+@auth_required
+def delete_all_financial_assets(asset_type):
+    """Delete all financial assets of a specific type"""
+    try:
+        if asset_type not in ['stocks', 'etfs', 'crypto']:
+            return jsonify({'status': 'error', 'message': 'Invalid asset type'}), 400
+        
+        if not financial_asset_model:
+            return jsonify({'status': 'error', 'message': 'Database not available'}), 500
+        
+        user_id = request.current_user['user_id']
+        deleted_count = financial_asset_model.delete_all_assets(user_id, asset_type)
+        
+        return jsonify({
+            'status': 'success',
+            'message': f'Successfully deleted {deleted_count} {asset_type}',
+            'deleted_count': deleted_count
+        })
+        
+    except Exception as e:
+        logger.error(f"Error deleting all {asset_type}: {e}")
+        return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
+
+@app.route('/api/financial/<asset_type>/refresh-prices', methods=['POST'])
+@auth_required
+def refresh_financial_asset_prices(asset_type):
+    """Refresh prices for financial assets"""
+    try:
+        if asset_type not in ['stocks', 'etfs', 'crypto']:
+            return jsonify({'status': 'error', 'message': 'Invalid asset type'}), 400
+        
+        if not financial_asset_model:
+            return jsonify({'status': 'error', 'message': 'Database not available'}), 500
+        
+        data = request.get_json() or {}
+        asset_ids = data.get('asset_ids', [])
+        
+        user_id = request.current_user['user_id']
+        
+        # Get assets to refresh
+        if asset_ids:
+            assets = []
+            for asset_id in asset_ids:
+                asset = financial_asset_model.get_asset_by_id(user_id, asset_id)
+                if asset:
+                    assets.append(asset)
+        else:
+            # Refresh all assets of this type
+            assets = financial_asset_model.get_assets_by_type(user_id, asset_type)
+        
+        if not assets:
+            return jsonify({'status': 'error', 'message': 'No assets to refresh'}), 400
+        
+        # Refresh prices using yfinance
+        updated, failed = yfinance_service.refresh_prices(assets)
+        
+        # Update database with new prices
+        updated_details = []
+        failed_details = []
+        
+        for asset in updated:
+            try:
+                success = financial_asset_model.update_price(
+                    user_id, 
+                    asset['id'], 
+                    asset['current_price'],
+                    'yfinance'
+                )
+                
+                if success:
+                    updated_details.append({
+                        'id': asset['id'],
+                        'name': asset['name'],
+                        'old_price': asset.get('old_price', 0),
+                        'new_price': asset['current_price']
+                    })
+                else:
+                    failed_details.append({
+                        'id': asset['id'],
+                        'name': asset['name'],
+                        'error': 'Failed to update in database'
+                    })
+                    
+            except Exception as e:
+                failed_details.append({
+                    'id': asset['id'],
+                    'name': asset['name'],
+                    'error': str(e)
+                })
+        
+        for failure in failed:
+            failed_details.append({
+                'id': failure['asset'].get('id', 'unknown'),
+                'name': failure['asset'].get('name', 'unknown'),
+                'error': failure['error']
+            })
+        
+        return jsonify({
+            'status': 'success',
+            'message': f'Refreshed {len(updated_details)} assets, {len(failed_details)} failed',
+            'updated_count': len(updated_details),
+            'failed_count': len(failed_details),
+            'details': {
+                'updated': updated_details,
+                'failed': failed_details
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Error refreshing {asset_type} prices: {e}")
+        return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
+
+# ============================================================================
 
 @app.route('/api/cards/rescrape', methods=['POST'])
 @auth_required

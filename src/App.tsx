@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import AssetTable from "./components/common/AssetTable";
+import FinancialAssetTable from "./components/common/FinancialAssetTable";
 import PortfolioSummary from "./components/portfolio/PortfolioSummary";
 import UserManagement from "./components/admin/UserManagement";
 import { SteamInventory } from "./components/SteamInventory";
@@ -109,6 +110,40 @@ function App() {
           steam: [],
         }));
       }
+
+      // Load financial assets (stocks, ETFs, crypto)
+      try {
+        const [stocksResponse, etfsResponse, cryptoResponse] =
+          await Promise.allSettled([
+            api.getFinancialAssets("stocks"),
+            api.getFinancialAssets("etfs"),
+            api.getFinancialAssets("crypto"),
+          ]);
+
+        setAssets((prev) => ({
+          ...prev,
+          stocks:
+            stocksResponse.status === "fulfilled"
+              ? stocksResponse.value.items || []
+              : [],
+          etfs:
+            etfsResponse.status === "fulfilled"
+              ? etfsResponse.value.items || []
+              : [],
+          crypto:
+            cryptoResponse.status === "fulfilled"
+              ? cryptoResponse.value.items || []
+              : [],
+        }));
+      } catch (financialError) {
+        console.warn("Failed to load financial assets:", financialError);
+        setAssets((prev) => ({
+          ...prev,
+          stocks: [],
+          etfs: [],
+          crypto: [],
+        }));
+      }
     } catch (error) {
       console.error("Failed to load portfolio data:", error);
       setError("Failed to load portfolio data. Please try again.");
@@ -157,7 +192,6 @@ function AppContent({
   const [activeSection, setActiveSection] = useState<
     AssetType | "dashboard" | "scrapers" | "users"
   >("dashboard");
-  const [activeScraperTab, setActiveScraperTab] = useState<AssetType>("cards");
 
   // Load initial data only after authentication is ready
   useEffect(() => {
@@ -191,11 +225,6 @@ function AppContent({
         error instanceof Error ? error.message : "Failed to update buy price"
       );
     }
-  };
-
-  const handleCardsScraping = async () => {
-    console.log("Cards scraping completed");
-    await loadData(); // Reload to get updated portfolio
   };
 
   const renderSectionContent = () => {
@@ -247,7 +276,7 @@ function AppContent({
         );
       case "stocks":
         return (
-          <AssetTable
+          <FinancialAssetTable
             assets={assets.stocks}
             assetType="stocks"
             onDataUpdate={loadData}
@@ -255,7 +284,7 @@ function AppContent({
         );
       case "etfs":
         return (
-          <AssetTable
+          <FinancialAssetTable
             assets={assets.etfs}
             assetType="etfs"
             onDataUpdate={loadData}
@@ -263,7 +292,7 @@ function AppContent({
         );
       case "crypto":
         return (
-          <AssetTable
+          <FinancialAssetTable
             assets={assets.crypto}
             assetType="crypto"
             onDataUpdate={loadData}

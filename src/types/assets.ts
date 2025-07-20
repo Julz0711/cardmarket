@@ -26,20 +26,22 @@ export interface Card extends BaseAsset {
 export interface Stock extends BaseAsset {
   type: "stocks";
   symbol: string;
-  company: string;
-  sector: string;
-  market: string;
+  company?: string;
+  sector?: string;
+  market?: string;
   dividend_yield?: number;
+  change_24h?: number;
 }
 
 // ETFs
 export interface ETF extends BaseAsset {
   type: "etfs";
   symbol: string;
-  fund_name: string;
-  expense_ratio: number;
+  fund_name?: string;
+  expense_ratio?: number;
   dividend_yield?: number;
-  category: string;
+  category?: string;
+  change_24h?: number;
 }
 
 // Cryptocurrency
