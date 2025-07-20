@@ -239,6 +239,7 @@ class ApiClient {
     tcg: string;
     expansion: string;
     numbers: number[];
+    language: string,
     headless?: boolean;
   }): Promise<{
     message: string;
