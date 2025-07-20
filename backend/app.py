@@ -132,7 +132,7 @@ def scrape_trading_cards():
         tcg = data.get('tcg', 'Pokemon')  # Default to Pokemon
         expansion = data.get('expansion')
         numbers = data.get('numbers', [])
-        language = data.get('language', 'Western')  # Default to Western language
+        card_language = data.get('language', 'Western')  # Default to Western language
         headless = data.get('headless', True)  # Default to headless mode
         
         if not expansion:
@@ -161,7 +161,7 @@ def scrape_trading_cards():
         numbers_to_scrape = []
         
         for number in numbers:
-            existing_card = card_model.find_existing_card(user_id, tcg, expansion, number, language)
+            existing_card = card_model.find_existing_card(user_id, tcg, expansion, number, card_language)
             if existing_card:
                 existing_cards.append({
                     'number': number,
@@ -182,7 +182,7 @@ def scrape_trading_cards():
             })
 
         # Call the scraper directly with the correct parameters including headless
-        scraped_cards_data = scraper_manager.scrape_assets('cards', tcg=tcg, expansion=expansion, numbers=numbers_to_scrape, card_language=language, headless=headless)
+        scraped_cards_data = scraper_manager.scrape_assets('cards', tcg=tcg, expansion=expansion, numbers=numbers_to_scrape, card_language=card_language, headless=headless)
         
         # Save scraped cards to MongoDB
         scraped_cards = []
@@ -194,7 +194,7 @@ def scrape_trading_cards():
                 'type': 'cards',
                 'tcg': card_info['tcg'],
                 'expansion': card_info['expansion'],
-                'card_language': card_info['language'],  # Rename 'language' to 'card_language'
+                'card_language': card_info['card_language'],  # Ensure 'card_language' is used consistently
                 'number': int(card_info['number']),
                 'name': card_info['name'],
                 'rarity': card_info['rarity'],
