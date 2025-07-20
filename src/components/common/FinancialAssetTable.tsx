@@ -19,6 +19,8 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
   onDataUpdate,
 }) => {
   const [filterText, setFilterText] = useState("");
+  // Sorting filter state
+  const [sortFilter, setSortFilter] = useState<string>("value");
 
   // Currency conversion state
   const [eurRate, setEurRate] = useState<number>(1.0); // Default to 1 for fallback
@@ -497,11 +499,26 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
         asset.symbol.toLowerCase().includes(filterText.toLowerCase()))
   );
 
-  // Simple sorting by name for pills
+  // Sorting logic
   const sortedAssets = [...filteredAssets].sort((a, b) => {
-    const aSymbol = "symbol" in a ? a.symbol : a.name;
-    const bSymbol = "symbol" in b ? b.symbol : b.name;
-    return aSymbol.localeCompare(bSymbol);
+    const totalValueA = a.current_price * a.quantity;
+    const totalValueB = b.current_price * b.quantity;
+    const profitA = totalValueA - a.price_bought * a.quantity;
+    const profitB = totalValueB - b.price_bought * b.quantity;
+    switch (sortFilter) {
+      case "value":
+        return totalValueB - totalValueA; // Descending total value
+      case "profit":
+        return profitB - profitA; // Descending profit
+      case "loss":
+        return profitA - profitB; // Descending loss (most negative first)
+      case "name":
+      default: {
+        const aSymbol = "symbol" in a ? a.symbol : a.name;
+        const bSymbol = "symbol" in b ? b.symbol : b.name;
+        return aSymbol.localeCompare(bSymbol);
+      }
+    }
   });
 
   const getAssetTypeLabel = () => {
@@ -536,7 +553,6 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
                 onClick={handleAddNew}
                 className="primary-btn btn-green disabled:bg-gray-600 disabled:cursor-not-allowed"
               >
-                <AddIcon className="mr-2" fontSize="small" />
                 Add New {getAssetTypeLabel().slice(0, -1)}
               </button>
               <button
@@ -575,23 +591,19 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="stats-card">
-              <div className="text-sm font-medium text-secondary">
-                Total Items
-              </div>
+              <div className="text-xs font-bold text-muted">Total Items</div>
               <div className="text-2xl font-bold text-primary">
                 {getTotalItems()}
               </div>
             </div>
             <div className="stats-card">
-              <div className="text-sm font-medium text-secondary">
-                Total Value
-              </div>
+              <div className="text-xs font-bold text-muted">Total Value</div>
               <div className="text-2xl font-bold text-primary">
                 {formatCurrency(getTotalValue())}
               </div>
             </div>
             <div className="stats-card">
-              <div className="text-sm font-medium text-secondary">
+              <div className="text-xs font-bold text-muted">
                 Total Investment
               </div>
               <div className="text-2xl font-bold text-primary">
@@ -599,9 +611,7 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
               </div>
             </div>
             <div className="stats-card">
-              <div className="text-sm font-medium text-secondary">
-                Total P&L
-              </div>
+              <div className="text-xs font-bold text-muted">Total P&L</div>
               <div
                 className={`text-2xl font-bold ${getProfitLossColor(
                   getTotalProfitLoss()
@@ -621,17 +631,31 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
       {/* Modern Asset Pills */}
       <div className="card">
         <div className="card-header">
-          <div className="flex justify-between items-center">
+          <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-2 md:gap-0">
             <h3 className="text-lg font-medium text-primary">
               {getAssetTypeLabel()} ({assets.length})
             </h3>
-            <input
-              type="text"
-              placeholder={`Filter ${assetType}...`}
-              value={filterText}
-              onChange={(e) => setFilterText(e.target.value)}
-              className="border border-primary bg-tertiary text-primary rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-secondary"
-            />
+            <div className="flex flex-col md:flex-row gap-2 md:gap-4 items-center">
+              <input
+                type="text"
+                placeholder={`Filter ${assetType}...`}
+                value={filterText}
+                onChange={(e) => setFilterText(e.target.value)}
+                className="input"
+              />
+              {/* Sorting filter dropdown */}
+              <select
+                value={sortFilter}
+                onChange={(e) => setSortFilter(e.target.value)}
+                className="select"
+                aria-label="Sort assets"
+              >
+                <option value="name">Name</option>
+                <option value="value">Value</option>
+                <option value="profit">Profit</option>
+                <option value="loss">Loss</option>
+              </select>
+            </div>
           </div>
         </div>
 
@@ -714,9 +738,9 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
 
                           {/* Portfolio Percentage Bar - Made smaller */}
                           <div className="flex items-center mt-1 space-x-2">
-                            <div className="w-48 bg-gray-700 rounded-full h-1.5 overflow-hidden">
+                            <div className="w-48 bg-tertiary rounded-full h-1.5 overflow-hidden">
                               <div
-                                className="h-full bg-blue"
+                                className="h-full bg-white/10"
                                 style={{
                                   width: `${Math.min(
                                     portfolioPercentage,
@@ -725,7 +749,7 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
                                 }}
                               />
                             </div>
-                            <div className="text-xs text-gray-400 min-w-[3rem] text-left">
+                            <div className="text-xs text-muted min-w-[3rem] text-left">
                               {portfolioPercentage.toFixed(1)}%
                             </div>
                           </div>
@@ -789,7 +813,7 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
                   </div>
 
                   {/* Add new purchase section */}
-                  <div className="bg-tertiary p-4 rounded-md border border-primary">
+                  <div className="bg-primary p-4 rounded-md border border-primary">
                     <div className="grid grid-cols-2 gap-3 mb-3">
                       <div>
                         <label className="block text-xs font-medium text-gray-400 mb-2">
@@ -801,7 +825,7 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
                           value={editFormData.tempQuantity || ""}
                           onChange={handleEditInputChange}
                           placeholder={assetType === "crypto" ? "0.001" : "10"}
-                          className="w-full border border-primary bg-primary text-white rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue placeholder-gray-500"
+                          className="w-full input"
                         />
                       </div>
                       <div>
@@ -818,7 +842,7 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
                           placeholder={
                             assetType === "crypto" ? "50000.00" : "150.00"
                           }
-                          className="w-full border border-primary bg-primary text-white rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue placeholder-gray-500"
+                          className="w-full input"
                         />
                       </div>
                     </div>
@@ -981,7 +1005,7 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
                         : "e.g., BTC-USD, ETH-USD"
                     }
                     autoComplete="off"
-                    className="w-full border border-primary bg-tertiary text-white rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue placeholder-gray-400"
+                    className="w-full input"
                   />
                 </div>
 
@@ -993,7 +1017,7 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
                     </div>
 
                     {/* Add new purchase section */}
-                    <div className="bg-tertiary p-4 rounded-md border border-primary">
+                    <div className="bg-primary p-4 rounded-md border border-primary">
                       <div className="grid grid-cols-2 gap-3 mb-3">
                         <div>
                           <label className="block text-xs font-medium text-gray-400 mb-2">
@@ -1005,7 +1029,7 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
                             value={addFormData.tempQuantity || ""}
                             onChange={handleAddInputChange}
                             placeholder="0.001"
-                            className="w-full border border-primary bg-primary text-white rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue placeholder-gray-500"
+                            className="w-full input"
                           />
                         </div>
                         <div>
@@ -1018,7 +1042,7 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
                             value={addFormData.tempPrice || ""}
                             onChange={handleAddInputChange}
                             placeholder="50000.00"
-                            className="w-full border border-primary bg-primary text-white rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue placeholder-gray-500"
+                            className="w-full input"
                           />
                         </div>
                       </div>
@@ -1115,7 +1139,7 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
                             value={addFormData.tempQuantity || ""}
                             onChange={handleAddInputChange}
                             placeholder="10"
-                            className="w-full border border-primary bg-primary text-white rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue placeholder-gray-500"
+                            className="input w-full"
                           />
                         </div>
                         <div>
@@ -1128,7 +1152,7 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
                             value={addFormData.tempPrice || ""}
                             onChange={handleAddInputChange}
                             placeholder="150.00"
-                            className="w-full border border-primary bg-primary text-white rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue placeholder-gray-500"
+                            className="w-full input"
                           />
                         </div>
                       </div>

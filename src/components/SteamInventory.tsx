@@ -585,7 +585,7 @@ export const SteamInventory: React.FC = () => {
                       value={steamIdInput}
                       onChange={(e) => setSteamIdInput(e.target.value)}
                       placeholder="Enter your Steam ID..."
-                      className="w-full px-3 py-2 border border-primary/20 rounded bg-tertiary text-primary"
+                      className="input"
                     />
                   </div>
 
@@ -600,7 +600,7 @@ export const SteamInventory: React.FC = () => {
                         type="checkbox"
                         checked={includePrices}
                         onChange={(e) => setIncludePrices(e.target.checked)}
-                        className="w-4 h-4 text-blue-600 bg-tertiary border-primary/20 rounded focus:ring-blue-500"
+                        className="w-4 h-4 text-blue bg-tertiary border-primary/20 rounded focus:ring-blue"
                       />
                       <div className="flex flex-col">
                         <span className="text-sm text-primary">
@@ -617,7 +617,7 @@ export const SteamInventory: React.FC = () => {
                         type="checkbox"
                         checked={includeFloats}
                         onChange={(e) => setIncludeFloats(e.target.checked)}
-                        className="w-4 h-4 text-blue-600 bg-tertiary border-primary/20 rounded focus:ring-blue-500"
+                        className="w-4 h-4 text-blue bg-tertiary border-primary/20 rounded focus:ring-blue"
                       />
                       <div className="flex flex-col">
                         <span className="text-sm text-primary">
@@ -802,7 +802,7 @@ export const SteamInventory: React.FC = () => {
                   value={nameFilter}
                   onChange={(e) => setNameFilter(e.target.value)}
                   placeholder="Filter by name..."
-                  className={inputStyle}
+                  className="input w-full"
                 />
               </div>
 
@@ -814,7 +814,7 @@ export const SteamInventory: React.FC = () => {
                 <select
                   value={rarityFilter}
                   onChange={(e) => setRarityFilter(e.target.value)}
-                  className={inputStyle}
+                  className="select w-full"
                 >
                   <option value="">All Rarities</option>
                   {uniqueRarities.map((rarity) => (
@@ -836,7 +836,7 @@ export const SteamInventory: React.FC = () => {
                       e.target.value as "name" | "rarity" | "price" | "profit"
                     )
                   }
-                  className={inputStyle}
+                  className="select w-full"
                 >
                   <option value="name">Name</option>
                   <option value="rarity">Rarity</option>
@@ -855,7 +855,7 @@ export const SteamInventory: React.FC = () => {
                   onChange={(e) =>
                     setSortOrder(e.target.value as "asc" | "desc")
                   }
-                  className={inputStyle}
+                  className="select w-full"
                 >
                   <option value="asc">
                     {sortBy === "name"

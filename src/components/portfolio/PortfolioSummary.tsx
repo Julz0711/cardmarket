@@ -4,7 +4,6 @@ import {
   Pie,
   Cell,
   ResponsiveContainer,
-  Tooltip,
   Legend,
   Sector,
 } from "recharts";
@@ -44,12 +43,6 @@ const PortfolioSummaryComponent: React.FC<PortfolioSummaryProps> = ({
       percentage: breakdown.percentage,
       count: breakdown.count,
     }));
-
-  // Pie chart active sector state
-  const [activeIndex, setActiveIndex] = React.useState(0);
-  const onPieEnter = (_: any, index: number) => {
-    setActiveIndex(index);
-  };
 
   // Custom active sector renderer
   const renderActiveShape = (props: any) => {

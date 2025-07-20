@@ -105,7 +105,7 @@ export const CardMarketScraper: React.FC<CardMarketScraperProps> = ({
                 name="tcg"
                 value={formData.tcg}
                 onChange={handleInputChange}
-                className="select w-full"
+                className="select"
               >
                 <option value="Pokemon">Pokemon</option>
                 <option value="Magic">Magic: The Gathering</option>
