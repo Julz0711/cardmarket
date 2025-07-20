@@ -109,14 +109,15 @@ class CardModel:
             logger.error(f"Failed to create card: {e}")
             raise
     
-    def find_existing_card(self, user_id: str, tcg: str, expansion: str, number: int) -> Optional[Dict]:
-        """Find an existing card by user_id, tcg, expansion, and number"""
+    def find_existing_card(self, user_id: str, tcg: str, expansion: str, number: int, card_language: str) -> Optional[Dict]:
+        """Find an existing card by user_id, tcg, expansion, number, and card_language"""
         try:
             query = {
                 'user_id': user_id,
                 'tcg': tcg,
                 'expansion': expansion,
-                'number': number
+                'number': number,
+                'card_language': card_language
             }
             
             card = self.collection.find_one(query)

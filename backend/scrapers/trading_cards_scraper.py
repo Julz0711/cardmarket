@@ -64,30 +64,31 @@ class TradingCardsScraper(BaseScraper):
     
     def validate_input(self, **kwargs) -> bool:
         """Validate input parameters for trading cards scraping"""
-        required_fields = ['tcg', 'expansion', 'numbers']
-        
+        required_fields = ['tcg', 'expansion', 'numbers', 'card_language']
+
         for field in required_fields:
             if field not in kwargs:
                 raise ValidationError(f"Missing required field: {field}")
-        
+
         tcg = kwargs.get('tcg')
         expansion = kwargs.get('expansion')
         numbers = kwargs.get('numbers')
-        
+        card_language = kwargs.get('card_language')
+
         if not tcg or not isinstance(tcg, str):
             raise ValidationError("TCG must be a non-empty string")
-        
+
         if not expansion or not isinstance(expansion, str):
             raise ValidationError("Expansion must be a non-empty string")
-        
+
         if not numbers or not isinstance(numbers, list) or len(numbers) == 0:
             raise ValidationError("Numbers must be a non-empty list")
-        
+
         # Check if all numbers are valid integers
         for num in numbers:
             if not isinstance(num, int) or num <= 0:
                 raise ValidationError(f"Invalid card number: {num}")
-        
+
         return True
     
     def scrape(self, **kwargs) -> List[Dict[str, Any]]:
@@ -97,7 +98,8 @@ class TradingCardsScraper(BaseScraper):
         Args:
             tcg (str): Trading Card Game name
             expansion (str): Set/expansion name
-            numbers (List[int]): List of card numbers to scrape
+            numbers (list): List of card numbers
+            card_language (str): Language of the cards
             
         Returns:
             List of card dictionaries
@@ -108,6 +110,7 @@ class TradingCardsScraper(BaseScraper):
         tcg = kwargs['tcg']
         expansion = kwargs['expansion']
         numbers = kwargs['numbers']
+        card_language = kwargs.get('card_language')  # Use 'card_language' instead of 'language'
         
         cards = []
 
@@ -179,7 +182,7 @@ class TradingCardsScraper(BaseScraper):
                         continue
                     
                     # Extract card data using original method
-                    card_data = self._extract_card_data_original(tcg, expansion, number)
+                    card_data = self._extract_card_data_original(tcg, expansion, number, card_language)
                     if card_data:
                         cards.append(card_data)
                         self.logger.info(f"Successfully scraped: {card_data['name']} (#{card_data['number']})")
@@ -200,7 +203,7 @@ class TradingCardsScraper(BaseScraper):
         finally:
             self._cleanup()
     
-    def _extract_card_data_original(self, tcg: str, expansion: str, target_number: int) -> Dict[str, Any]:
+    def _extract_card_data_original(self, tcg: str, expansion: str, target_number: int, card_language: str) -> Dict[str, Any]:
         """Extract card data from current page using original working logic"""
         try:
             # Extract number
@@ -249,23 +252,48 @@ class TradingCardsScraper(BaseScraper):
                 supply = 0
             
             # Extract current price
-            price_elements = self.driver.find_elements(
-                By.XPATH,
-                "//div[contains(@class, 'table-body')]//div//div[contains(@class, 'col-price')]"
-            )
-            if price_elements:
-                price_text = price_elements[0].text.strip()
-                # Remove currency symbol and convert comma to dot
-                price_clean = price_text[:-2].replace(",", ".")
-                current_price = float(price_clean)
+            if card_language == "Western":
+                time.sleep(1)
+                self.driver.find_elements(By.XPATH, "//div[contains(@class, 'table-body')]//div//div[contains(@class, 'col')]//div[contains(@class, 'row g-0')]//a")[0].click()
+                time.sleep(1)
+                self.driver.execute_script("document.body.style.zoom='50%'")
+
+                # Ensure language filter is applied
+                if not self.driver.find_elements(By.XPATH, "//input[contains(@name, 'language[1]')]")[0].is_selected():
+                    self.driver.find_elements(By.XPATH, "//a[contains(@aria-controls, 'articleFilterProductLanguage')]")[0].click()
+                    time.sleep(1)
+                    self.driver.find_elements(By.XPATH, "//input[contains(@name, 'language[1]')]")[0].click()
+                    self.driver.find_elements(By.XPATH, "//input[contains(@title, 'Filter')]")[0].click()
+                    time.sleep(1)
+                    self.driver.execute_script("document.body.style.zoom='50%'")
+
+                price_elements = self.driver.find_elements(By.XPATH, "//dd")
+                if price_elements:
+                    price_text = price_elements[6].text.strip()
+                    price_clean = price_text[:-2].replace(",", ".")
+                    current_price = float(price_clean)
+                else:
+                    self.logger.warning("Could not find price")
+                    current_price = 0.0
             else:
-                self.logger.warning("Could not find price")
-                current_price = 0.0
+                # Extract current price
+                price_elements = self.driver.find_elements(
+                    By.XPATH,
+                    "//div[contains(@class, 'table-body')]//div//div[contains(@class, 'col-price')]"
+                )
+                if price_elements:
+                    price_text = price_elements[0].text.strip()
+                    price_clean = price_text[:-2].replace(",", ".")
+                    current_price = float(price_clean)
+                else:
+                    self.logger.warning("Could not find price")
+                    current_price = 0.0
             
             return {
                 "tcg": tcg,
                 "expansion": expansion,
                 "number": number,
+                "card_language": card_language,  # Rename 'language' to 'card_language'
                 "name": name,
                 "rarity": rarity,
                 "supply": supply,

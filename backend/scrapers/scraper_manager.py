@@ -68,7 +68,9 @@ class ScraperManager:
         if scraper_type == 'cards' and 'headless' in kwargs:
             from .trading_cards_scraper import TradingCardsScraper
             headless = kwargs.pop('headless')
+            card_language = kwargs.pop('card_language', None)  # Extract 'card_language'
             scraper = TradingCardsScraper(headless=headless)
+            kwargs['card_language'] = card_language  # Pass 'card_language' to the scraper
         elif scraper_type == 'steam' and 'headless' in kwargs:
             from .steam_inventory_scraper import SteamInventoryScraper
             headless = kwargs.pop('headless', True)
