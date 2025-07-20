@@ -41,6 +41,7 @@ const AssetTable: React.FC<AssetTableProps> = ({
     tcg: "Pokemon",
     expansion: "",
     numbers: "",
+    language: "Western",
     headless: true,
   });
   // Inline buy price editing state
@@ -104,6 +105,7 @@ const AssetTable: React.FC<AssetTableProps> = ({
       tcg: "Pokemon",
       expansion: "",
       numbers: "",
+      language: "Western",
       headless: true,
     });
   };
@@ -148,11 +150,12 @@ const AssetTable: React.FC<AssetTableProps> = ({
         tcg: addCardFormData.tcg,
         expansion: addCardFormData.expansion,
         numbers: numbers,
+        language: addCardFormData.language,
         headless: addCardFormData.headless,
       });
 
       setAddCardMessage(
-        `Successfully scraped ${result.scraped_cards.length} cards from ${addCardFormData.tcg} - ${addCardFormData.expansion}!`
+        `Successfully scraped ${result.scraped_cards.length} cards from ${addCardFormData.tcg} - ${addCardFormData.expansion} in ${addCardFormData.language}!`
       );
       setShowAddCardModal(false);
 
@@ -161,6 +164,7 @@ const AssetTable: React.FC<AssetTableProps> = ({
         tcg: "Pokemon",
         expansion: "",
         numbers: "",
+        language: "Western",
         headless: true,
       });
 
@@ -808,6 +812,26 @@ const AssetTable: React.FC<AssetTableProps> = ({
                     152
                   </p>
                 </div>
+
+                <div>
+                  <label
+                    htmlFor="add-language"
+                    className="block text-sm font-medium text-gray-300 mb-2"
+                  >
+                    Language
+                  </label>
+                  <select
+                    id="add-language"
+                    name="language"
+                    value={addCardFormData.language}
+                    onChange={handleAddCardInputChange}
+                    className="w-full border border-primary bg-tertiary text-white rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue placeholder-gray-400"
+                  >
+                    <option value="Western">Western</option>
+                    <option value="Asian">Asian</option>
+                  </select>
+                </div>
+
 
                 <div className="flex items-center">
                   <input
