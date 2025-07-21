@@ -98,11 +98,17 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
   const [deleteError, setDeleteError] = useState<string>("");
 
   // Format as EUR, fallback to USD if rate not available
-  const formatCurrency = (value: number) => {
-    if (eurRate !== 1.0) {
-      return `€${(value * eurRate).toFixed(2)}`;
+  // If asset has currency and it's not EUR, convert using eurRate
+  const formatCurrency = (value: number, currency?: string) => {
+    if (currency && currency !== "EUR") {
+      // Assume USD if not EUR (yfinance usually returns USD or EUR)
+      if (eurRate !== 1.0) {
+        return `€${(value * eurRate).toFixed(2)}`;
+      }
+      return `$${value.toFixed(2)}`;
     }
-    return `$${value.toFixed(2)}`;
+    // EUR or unknown
+    return `€${value.toFixed(2)}`;
   };
   const formatPercentage = (value: number) =>
     `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
@@ -121,17 +127,23 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
   const getTotalItems = () => assets.length;
 
   const getTotalValue = () => {
-    return assets.reduce(
-      (total, asset) => total + asset.current_price * asset.quantity,
-      0
-    );
+    return assets.reduce((total, asset) => {
+      const price = asset.current_price;
+      if (asset.currency && asset.currency !== "EUR") {
+        return total + price * eurRate * asset.quantity;
+      }
+      return total + price * asset.quantity;
+    }, 0);
   };
 
   const getTotalInvestment = () => {
-    return assets.reduce(
-      (total, asset) => total + asset.price_bought * asset.quantity,
-      0
-    );
+    return assets.reduce((total, asset) => {
+      const price = asset.price_bought;
+      if (asset.currency && asset.currency !== "EUR") {
+        return total + price * eurRate * asset.quantity;
+      }
+      return total + price * asset.quantity;
+    }, 0);
   };
 
   const getTotalProfitLoss = () => {
@@ -240,23 +252,15 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
 
       // Use total quantity from purchase history for all asset types
       const quantity = getTotalQuantity();
+      const averagePrice = getAveragePrice();
 
       // Call API to add new financial asset with weighted average price
-      const response = await apiClient.addFinancialAsset({
+      await apiClient.addFinancialAsset({
         assetType,
         ticker: addFormData.ticker.toUpperCase(),
         quantity: quantity,
+        price_bought: averagePrice > 0 ? averagePrice : undefined,
       });
-
-      // Update the price_bought to the weighted average from our purchase history
-      const averagePrice = getAveragePrice();
-      if (averagePrice > 0 && response.asset && response.asset.id) {
-        await apiClient.updateFinancialAssetBoughtPrice(
-          assetType,
-          response.asset.id,
-          averagePrice
-        );
-      }
 
       setAddMessage(
         `Successfully added ${addFormData.ticker.toUpperCase()} to ${assetType}!`
@@ -553,6 +557,7 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
                 onClick={handleAddNew}
                 className="primary-btn btn-green disabled:bg-gray-600 disabled:cursor-not-allowed"
               >
+                <AddIcon fontSize="inherit" />
                 Add New {getAssetTypeLabel().slice(0, -1)}
               </button>
               <button
@@ -560,7 +565,12 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
                 disabled={isDeleting || assets.length === 0}
                 className="primary-btn btn-red disabled:bg-gray-600 disabled:cursor-not-allowed"
               >
-                {isDeleting ? "Deleting..." : "Delete All"}
+                {isDeleting ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                ) : (
+                  <DeleteIcon fontSize="inherit" />
+                )}
+                Delete All
               </button>
             </div>
           </div>
@@ -669,8 +679,16 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
           ) : (
             <div className="space-y-3">
               {sortedAssets.map((asset) => {
-                const totalValue = asset.current_price * asset.quantity;
-                const totalInvestment = asset.price_bought * asset.quantity;
+                const price = asset.current_price;
+                const totalValue =
+                  asset.currency && asset.currency !== "EUR"
+                    ? price * eurRate * asset.quantity
+                    : price * asset.quantity;
+                const invPrice = asset.price_bought;
+                const totalInvestment =
+                  asset.currency && asset.currency !== "EUR"
+                    ? invPrice * eurRate * asset.quantity
+                    : invPrice * asset.quantity;
                 const profitLoss = totalValue - totalInvestment;
                 const profitLossPercentage =
                   totalInvestment > 0
@@ -695,7 +713,7 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
                       {/* Left Section: Logo & Asset Info */}
                       <div className="flex items-center space-x-4 flex-1">
                         {/* Asset Logo */}
-                        <div className="w-12 h-12 bg-secondary border border-primary rounded-full flex items-center justify-center overflow-hidden">
+                        <div className="w-10 h-10 bg-white border border-primary rounded-full flex items-center justify-center overflow-hidden">
                           <img
                             src={getAssetLogo(asset)}
                             alt={symbol}
@@ -704,7 +722,7 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
                               // Fallback to first 3 letters if image fails to load
                               const target = e.target as HTMLImageElement;
                               target.style.display = "none";
-                              target.parentElement!.innerHTML = `<span class="text-sm font-bold text-white">${symbol
+                              target.parentElement!.innerHTML = `<span class="text-sm font-bold text-black">${symbol
                                 .slice(0, 3)
                                 .toUpperCase()}</span>`;
                             }}
@@ -714,14 +732,30 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
                         {/* Asset Details */}
                         <div className="flex-1">
                           <div className="flex items-center space-x-4">
-                            {/* Ticker Symbol */}
-                            <div className="text-lg font-bold text-white">
-                              {symbol}
+                            {/* Ticker Symbol (smaller) and Full Name */}
+                            <div className="flex flex-row items-center gap-2">
+                              <span
+                                className="text-sm font-semibold text-white truncate"
+                                title={asset.name}
+                              >
+                                {asset.name}
+                              </span>
+                              <span className="text-sm font-semibold text-muted tracking-wide uppercase leading-tight">
+                                ({symbol})
+                              </span>
                             </div>
 
                             {/* Current Price */}
-                            <div className="text-lg text-gray-300">
-                              {formatCurrency(asset.current_price)}
+                            <div className="text-md font-semibold text-gold">
+                              {formatCurrency(
+                                asset.current_price,
+                                asset.currency
+                              )}
+                              {asset.currency && (
+                                <span className="text-xs text-muted ml-1">
+                                  ({asset.currency})
+                                </span>
+                              )}
                             </div>
 
                             {/* 24h Change */}
@@ -736,7 +770,7 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
                             </div>
                           </div>
 
-                          {/* Portfolio Percentage Bar - Made smaller */}
+                          {/* Portfolio Percentage Bar - Made smaller, with amount holding */}
                           <div className="flex items-center mt-1 space-x-2">
                             <div className="w-48 bg-tertiary rounded-full h-1.5 overflow-hidden">
                               <div
@@ -752,6 +786,12 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
                             <div className="text-xs text-muted min-w-[3rem] text-left">
                               {portfolioPercentage.toFixed(1)}%
                             </div>
+                            <div className="text-xs text-gray-400 ml-2">
+                              <span className="text-muted">
+                                ({asset.quantity}{" "}
+                                {assetType === "crypto" ? "units" : "shares"})
+                              </span>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -759,7 +799,9 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
                       {/* Right Section: Total Value */}
                       <div className="text-right">
                         <div className="text-xl font-bold text-white">
-                          {formatCurrency(totalValue)}
+                          {assetType === "crypto"
+                            ? formatCurrency(totalValue, "USD")
+                            : formatCurrency(totalValue, "EUR")}
                         </div>
                         <div
                           className={`text-sm ${getProfitLossColor(
@@ -767,7 +809,12 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
                           )}`}
                         >
                           {getProfitLossSymbol(profitLoss)}
-                          {formatCurrency(Math.abs(profitLoss))}
+                          {assetType === "crypto"
+                            ? formatCurrency(
+                                Math.abs(profitLoss),
+                                asset.currency
+                              )
+                            : formatCurrency(Math.abs(profitLoss), "EUR")}
                           <span className="text-xs ml-1">
                             ({formatPercentage(profitLossPercentage)})
                           </span>
@@ -977,10 +1024,37 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
       {/* Add Modal */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-primary rounded-lg p-6 w-full max-w-md mx-4 border border-primary">
+          <div className="bg-primary rounded-lg p-6 w-full max-w-lg mx-4 border border-primary">
             <h3 className="text-lg font-semibold text-white mb-4">
               Add New {getAssetTypeLabel().slice(0, -1)}
             </h3>
+            {/* Info box for symbol lookup */}
+            <div className="mb-4 p-3 bg-blue/20 border border-blue/60 text-blue-100 rounded-lg text-xs">
+              <strong>Tip:</strong> To find the correct symbol, search for your
+              asset on{" "}
+              <a
+                href="https://de.finance.yahoo.com/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline text-gold hover:text-gray-200"
+              >
+                Yahoo Finance
+              </a>
+              .<br />
+              For example, the S&P 500 ETF is{" "}
+              <span className="font-semibold bg-blue/60 px-1 rounded">SPY</span>
+              , Apple is{" "}
+              <span className="font-semibold bg-blue/60 px-1 rounded">
+                AAPL
+              </span>
+              , and Bitcoin is{" "}
+              <span className="font-semibold bg-blue/60 px-1 rounded">
+                BTC-USD
+              </span>
+              .<br />
+              Use the symbol exactly as shown on Yahoo Finance for accurate
+              price data.
+            </div>
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -1049,7 +1123,7 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
                       <button
                         type="button"
                         onClick={handleAddPurchase}
-                        className="primary-btn btn-blue text-xs py-1 px-3"
+                        className="primary-btn btn-blue"
                       >
                         Add Purchase
                       </button>
@@ -1159,7 +1233,7 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
                       <button
                         type="button"
                         onClick={handleAddPurchase}
-                        className="primary-btn btn-blue text-xs py-1 px-3"
+                        className="primary-btn btn-blue"
                       >
                         Add Purchase
                       </button>

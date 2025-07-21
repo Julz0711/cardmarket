@@ -26,7 +26,7 @@ export const UserMenu = ({ onUserManagementClick }: UserMenuProps) => {
           className="primary-btn btn-black flex items-center gap-1"
           title="User Management"
         >
-          <PersonIcon fontSize="small" />
+          <PersonIcon fontSize="inherit" />
           <span className="hidden sm:inline">Users</span>
         </button>
       )}

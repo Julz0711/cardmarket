@@ -9,6 +9,8 @@ import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import DeleteIcon from "@mui/icons-material/Delete";
 import CheckIcon from "@mui/icons-material/Check";
 import CloseIcon from "@mui/icons-material/Close";
+import AddIcon from "@mui/icons-material/Add";
+import RefreshIcon from "@mui/icons-material/Refresh";
 
 interface AssetTableProps {
   assets: Asset[];
@@ -345,31 +347,8 @@ const AssetTable: React.FC<AssetTableProps> = ({
                   onClick={handleAddNewCard}
                   className="primary-btn btn-green disabled:bg-gray-600 disabled:cursor-not-allowed"
                 >
+                  <AddIcon fontSize="inherit" />
                   Add New Card
-                </button>
-              )}
-              {assetType === "stocks" && (
-                <button
-                  onClick={() => alert("Add New Stock (not implemented)")}
-                  className="primary-btn btn-green disabled:bg-gray-600 disabled:cursor-not-allowed"
-                >
-                  Add New Stock
-                </button>
-              )}
-              {assetType === "etfs" && (
-                <button
-                  onClick={() => alert("Add New ETF (not implemented)")}
-                  className="primary-btn btn-green disabled:bg-gray-600 disabled:cursor-not-allowed"
-                >
-                  Add New ETF
-                </button>
-              )}
-              {assetType === "crypto" && (
-                <button
-                  onClick={() => alert("Add New Crypto (not implemented)")}
-                  className="primary-btn btn-green disabled:bg-gray-600 disabled:cursor-not-allowed"
-                >
-                  Add New Crypto
                 </button>
               )}
               {/* Rescrape/refresh and delete all remain for all types */}
@@ -379,7 +358,14 @@ const AssetTable: React.FC<AssetTableProps> = ({
                   disabled={isRescraping || assets.length === 0}
                   className="primary-btn disabled:bg-gray-600 disabled:cursor-not-allowed"
                 >
-                  {isRescraping ? "Rescraping..." : "Rescrape Prices"}
+                  {isRescraping ? (
+                    "Updating..."
+                  ) : (
+                    <>
+                      <RefreshIcon fontSize="inherit" />
+                      {"Update Prices"}
+                    </>
+                  )}
                 </button>
               )}
               <button
@@ -387,7 +373,14 @@ const AssetTable: React.FC<AssetTableProps> = ({
                 disabled={isDeleting || assets.length === 0}
                 className="primary-btn btn-red disabled:bg-gray-600 disabled:cursor-not-allowed"
               >
-                {isDeleting ? "Deleting..." : "Delete All"}
+                {isDeleting ? (
+                  "Deleting..."
+                ) : (
+                  <>
+                    <DeleteIcon fontSize="inherit" />
+                    {"Delete All"}
+                  </>
+                )}
               </button>
             </div>
           </div>
@@ -763,13 +756,6 @@ const AssetTable: React.FC<AssetTableProps> = ({
                   </select>
                 </div>
 
-                {/*language
-                
-                input 
-                addCardFormData.language
-                onChange={handleAddCardInputChange}
-                
-                */}
                 <div>
                   <label
                     htmlFor="add-expansion"
@@ -826,13 +812,12 @@ const AssetTable: React.FC<AssetTableProps> = ({
                     name="language"
                     value={addCardFormData.language}
                     onChange={handleAddCardInputChange}
-                    className="w-full border border-primary bg-tertiary text-white rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue placeholder-gray-400"
+                    className="w-full select"
                   >
                     <option value="Western">Western</option>
                     <option value="Asian">Asian</option>
                   </select>
                 </div>
-
 
                 <div className="flex items-center">
                   <input

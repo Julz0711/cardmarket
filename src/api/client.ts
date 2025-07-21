@@ -239,7 +239,7 @@ class ApiClient {
     tcg: string;
     expansion: string;
     numbers: number[];
-    language: string,
+    language: string;
     headless?: boolean;
   }): Promise<{
     message: string;
@@ -552,17 +552,26 @@ class ApiClient {
     assetType: "stocks" | "etfs" | "crypto";
     ticker: string;
     quantity: number;
+    price_bought?: number;
   }): Promise<{
     status: string;
     message: string;
     asset: Asset;
   }> {
+    const body: any = {
+      ticker: data.ticker,
+      quantity: data.quantity,
+    };
+    if (
+      typeof data.price_bought === "number" &&
+      !isNaN(data.price_bought) &&
+      data.price_bought > 0
+    ) {
+      body.price_bought = data.price_bought;
+    }
     return this.request(`/financial/${data.assetType}`, {
       method: "POST",
-      body: JSON.stringify({
-        ticker: data.ticker,
-        quantity: data.quantity,
-      }),
+      body: JSON.stringify(body),
     });
   }
 

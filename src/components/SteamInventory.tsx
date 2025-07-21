@@ -552,13 +552,13 @@ export const SteamInventory: React.FC = () => {
               {items.length > 0 && (
                 <button
                   onClick={() => setDeleteAllConfirm(true)}
-                  className="primary-btn btn-red text-sm px-3 py-1 flex items-center"
+                  className="primary-btn btn-red"
                   disabled={deletingAll}
                 >
                   {deletingAll ? (
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                   ) : (
-                    <DeleteIcon fontSize="small" className="mr-1" />
+                    <DeleteIcon fontSize="inherit" />
                   )}
                   Clear Inventory
                 </button>
@@ -739,13 +739,13 @@ export const SteamInventory: React.FC = () => {
               {items.length > 0 && (
                 <button
                   onClick={handleUpdatePrices}
-                  className="primary-btn btn-black text-sm px-3 py-1 flex items-center"
+                  className="primary-btn btn-black"
                   disabled={updatingPrices || updatingFloats}
                 >
                   {updatingPrices ? (
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                   ) : (
-                    <RefreshIcon fontSize="small" className="mr-1" />
+                    <RefreshIcon fontSize="inherit" />
                   )}
                   {updatingPrices ? "Updating..." : "Update Prices"}
                 </button>
@@ -755,13 +755,13 @@ export const SteamInventory: React.FC = () => {
               {items.length > 0 && (
                 <button
                   onClick={handleUpdateFloats}
-                  className="primary-btn btn-black text-sm px-3 py-1 flex items-center"
+                  className="primary-btn btn-black"
                   disabled={updatingFloats || updatingPrices}
                 >
                   {updatingFloats ? (
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                   ) : (
-                    <RefreshIcon fontSize="small" className="mr-1" />
+                    <RefreshIcon fontSize="inherit" />
                   )}
                   {updatingFloats ? "Updating..." : "Update Float & Pattern"}
                 </button>
@@ -770,7 +770,7 @@ export const SteamInventory: React.FC = () => {
               {/* Filter Toggle Button */}
               <button
                 onClick={clearFilters}
-                className="primary-btn btn-black text-sm px-3 py-1"
+                className="primary-btn btn-black"
                 disabled={
                   !nameFilter &&
                   !rarityFilter &&
@@ -780,7 +780,7 @@ export const SteamInventory: React.FC = () => {
                   sortOrder === "asc"
                 }
               >
-                <DeleteIcon fontSize="small" className="mr-1" />
+                <DeleteIcon fontSize="inherit" />
                 Clear Filters
               </button>
             </div>
