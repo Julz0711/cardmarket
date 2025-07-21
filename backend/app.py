@@ -611,13 +611,18 @@ def add_financial_asset(asset_type):
         
         # Prepare asset data for database
         user_id = request.current_user['user_id']
+        # Accept price_bought from client, fallback to yfinance price if not provided
+        price_bought = float(data.get('price_bought', 0))
+        if price_bought <= 0:
+            price_bought = asset_info['current_price']
         asset_data = {
             'user_id': user_id,
             'asset_type': asset_type,
             'symbol': asset_info['symbol'],
             'name': asset_info['name'],
             'current_price': asset_info['current_price'],
-            'price_bought': asset_info['current_price'],  # Default to current price
+            'currency': asset_info.get('currency', 'USD'),
+            'price_bought': price_bought,
             'quantity': quantity,
             'change_24h': asset_info.get('change_24h', 0),
         }

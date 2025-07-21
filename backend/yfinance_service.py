@@ -93,6 +93,7 @@ class YFinanceService:
                 'symbol': symbol.upper(),
                 'name': info.get('longName', info.get('shortName', symbol)),
                 'current_price': current_price,
+                'currency': info.get('currency', 'USD'),
                 'change_24h': change_24h,
                 'last_updated': datetime.utcnow().isoformat(),
                 'asset_type': asset_type

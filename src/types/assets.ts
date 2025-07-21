@@ -9,6 +9,7 @@ export interface BaseAsset {
   price_bought: number;
   quantity: number;
   last_updated: string;
+  currency?: string; // Added for price currency
 }
 
 // Trading Cards

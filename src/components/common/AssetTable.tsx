@@ -9,6 +9,8 @@ import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import DeleteIcon from "@mui/icons-material/Delete";
 import CheckIcon from "@mui/icons-material/Check";
 import CloseIcon from "@mui/icons-material/Close";
+import AddIcon from "@mui/icons-material/Add";
+import RefreshIcon from "@mui/icons-material/Refresh";
 
 interface AssetTableProps {
   assets: Asset[];
@@ -60,7 +62,7 @@ const AssetTable: React.FC<AssetTableProps> = ({
 
   const getProfitLossSymbol = (profitLoss: number) => {
     if (profitLoss > 0) return "+";
-    return "-";
+    return "";
   };
 
   const getProfitLossPercentage = (asset: Asset) => {
@@ -345,31 +347,8 @@ const AssetTable: React.FC<AssetTableProps> = ({
                   onClick={handleAddNewCard}
                   className="primary-btn btn-green disabled:bg-gray-600 disabled:cursor-not-allowed"
                 >
+                  <AddIcon fontSize="inherit" />
                   Add New Card
-                </button>
-              )}
-              {assetType === "stocks" && (
-                <button
-                  onClick={() => alert("Add New Stock (not implemented)")}
-                  className="primary-btn btn-green disabled:bg-gray-600 disabled:cursor-not-allowed"
-                >
-                  Add New Stock
-                </button>
-              )}
-              {assetType === "etfs" && (
-                <button
-                  onClick={() => alert("Add New ETF (not implemented)")}
-                  className="primary-btn btn-green disabled:bg-gray-600 disabled:cursor-not-allowed"
-                >
-                  Add New ETF
-                </button>
-              )}
-              {assetType === "crypto" && (
-                <button
-                  onClick={() => alert("Add New Crypto (not implemented)")}
-                  className="primary-btn btn-green disabled:bg-gray-600 disabled:cursor-not-allowed"
-                >
-                  Add New Crypto
                 </button>
               )}
               {/* Rescrape/refresh and delete all remain for all types */}
@@ -379,7 +358,14 @@ const AssetTable: React.FC<AssetTableProps> = ({
                   disabled={isRescraping || assets.length === 0}
                   className="primary-btn disabled:bg-gray-600 disabled:cursor-not-allowed"
                 >
-                  {isRescraping ? "Rescraping..." : "Rescrape Prices"}
+                  {isRescraping ? (
+                    "Updating..."
+                  ) : (
+                    <>
+                      <RefreshIcon fontSize="inherit" />
+                      {"Update Prices"}
+                    </>
+                  )}
                 </button>
               )}
               <button
@@ -387,7 +373,14 @@ const AssetTable: React.FC<AssetTableProps> = ({
                 disabled={isDeleting || assets.length === 0}
                 className="primary-btn btn-red disabled:bg-gray-600 disabled:cursor-not-allowed"
               >
-                {isDeleting ? "Deleting..." : "Delete All"}
+                {isDeleting ? (
+                  "Deleting..."
+                ) : (
+                  <>
+                    <DeleteIcon fontSize="inherit" />
+                    {"Delete All"}
+                  </>
+                )}
               </button>
             </div>
           </div>
@@ -428,23 +421,19 @@ const AssetTable: React.FC<AssetTableProps> = ({
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="stats-card">
-              <div className="text-sm font-medium text-secondary">
-                Total Items
-              </div>
+              <div className="text-xs font-bold text-muted">Total Items</div>
               <div className="text-2xl font-bold text-primary">
                 {getTotalItems()}
               </div>
             </div>
             <div className="stats-card">
-              <div className="text-sm font-medium text-secondary">
-                Total Value
-              </div>
+              <div className="text-xs font-bold text-muted">Total Value</div>
               <div className="text-2xl font-bold text-primary">
                 {formatCurrency(getTotalValue())}
               </div>
             </div>
             <div className="stats-card">
-              <div className="text-sm font-medium text-secondary">
+              <div className="text-xs font-bold text-muted">
                 Total Investment
               </div>
               <div className="text-2xl font-bold text-primary">
@@ -452,9 +441,7 @@ const AssetTable: React.FC<AssetTableProps> = ({
               </div>
             </div>
             <div className="stats-card">
-              <div className="text-sm font-medium text-secondary">
-                Total P&L
-              </div>
+              <div className="text-xs font-bold text-muted">Total P&L</div>
               <div
                 className={`text-2xl font-bold ${getProfitLossColor(
                   getTotalProfitLoss()
@@ -485,7 +472,7 @@ const AssetTable: React.FC<AssetTableProps> = ({
               placeholder={`Filter ${assetType}...`}
               value={filterText}
               onChange={(e) => setFilterText(e.target.value)}
-              className="border border-gray-600 bg-tertiary text-primary rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-secondary"
+              className="input"
             />
           </div>
         </div>
@@ -617,7 +604,7 @@ const AssetTable: React.FC<AssetTableProps> = ({
                                   onChange={(e) =>
                                     setEditBuyPriceValue(e.target.value)
                                   }
-                                  className="w-20 px-2 py-1 text-sm border border-primary rounded bg-tertiary text-primary text-right"
+                                  className="input w-20"
                                   step="0.01"
                                   min="0"
                                   onBlur={() => {
@@ -758,7 +745,7 @@ const AssetTable: React.FC<AssetTableProps> = ({
                     name="tcg"
                     value={addCardFormData.tcg}
                     onChange={handleAddCardInputChange}
-                    className="w-full border border-primary bg-tertiary text-white rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue placeholder-gray-400"
+                    className="select w-full"
                   >
                     <option value="Pokemon">Pokemon</option>
                     <option value="Magic">Magic: The Gathering</option>
@@ -784,7 +771,7 @@ const AssetTable: React.FC<AssetTableProps> = ({
                     onChange={handleAddCardInputChange}
                     placeholder="e.g., Stellar Crown"
                     autoComplete="off"
-                    className="w-full border border-primary bg-tertiary text-white rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue placeholder-gray-400"
+                    className="input w-full"
                     key="expansion-input"
                   />
                 </div>
@@ -804,7 +791,7 @@ const AssetTable: React.FC<AssetTableProps> = ({
                     onChange={handleAddCardInputChange}
                     placeholder="e.g., 170, 135, 152, 108"
                     autoComplete="off"
-                    className="w-full border border-primary bg-tertiary text-white rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue placeholder-gray-400"
+                    className="input w-full"
                     key="numbers-input"
                   />
                   <p className="text-xs text-gray-400 mt-1">
@@ -825,13 +812,12 @@ const AssetTable: React.FC<AssetTableProps> = ({
                     name="language"
                     value={addCardFormData.language}
                     onChange={handleAddCardInputChange}
-                    className="w-full border border-primary bg-tertiary text-white rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue placeholder-gray-400"
+                    className="w-full select"
                   >
                     <option value="Western">Western</option>
                     <option value="Asian">Asian</option>
                   </select>
                 </div>
-
 
                 <div className="flex items-center">
                   <input
@@ -840,7 +826,7 @@ const AssetTable: React.FC<AssetTableProps> = ({
                     name="headless"
                     checked={addCardFormData.headless}
                     onChange={handleAddCardInputChange}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-600 bg-gray-700 rounded"
+                    className="h-4 w-4 text-blue focus:ring-blue border-gray-600 bg-gray-700 rounded"
                   />
                   <label
                     htmlFor="add-headless"

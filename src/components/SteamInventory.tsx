@@ -552,13 +552,13 @@ export const SteamInventory: React.FC = () => {
               {items.length > 0 && (
                 <button
                   onClick={() => setDeleteAllConfirm(true)}
-                  className="primary-btn btn-red text-sm px-3 py-1 flex items-center"
+                  className="primary-btn btn-red"
                   disabled={deletingAll}
                 >
                   {deletingAll ? (
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                   ) : (
-                    <DeleteIcon fontSize="small" className="mr-1" />
+                    <DeleteIcon fontSize="inherit" />
                   )}
                   Clear Inventory
                 </button>
@@ -585,7 +585,7 @@ export const SteamInventory: React.FC = () => {
                       value={steamIdInput}
                       onChange={(e) => setSteamIdInput(e.target.value)}
                       placeholder="Enter your Steam ID..."
-                      className="w-full px-3 py-2 border border-primary/20 rounded bg-tertiary text-primary"
+                      className="input"
                     />
                   </div>
 
@@ -600,7 +600,7 @@ export const SteamInventory: React.FC = () => {
                         type="checkbox"
                         checked={includePrices}
                         onChange={(e) => setIncludePrices(e.target.checked)}
-                        className="w-4 h-4 text-blue-600 bg-tertiary border-primary/20 rounded focus:ring-blue-500"
+                        className="w-4 h-4 text-blue bg-tertiary border-primary/20 rounded focus:ring-blue"
                       />
                       <div className="flex flex-col">
                         <span className="text-sm text-primary">
@@ -617,7 +617,7 @@ export const SteamInventory: React.FC = () => {
                         type="checkbox"
                         checked={includeFloats}
                         onChange={(e) => setIncludeFloats(e.target.checked)}
-                        className="w-4 h-4 text-blue-600 bg-tertiary border-primary/20 rounded focus:ring-blue-500"
+                        className="w-4 h-4 text-blue bg-tertiary border-primary/20 rounded focus:ring-blue"
                       />
                       <div className="flex flex-col">
                         <span className="text-sm text-primary">
@@ -739,13 +739,13 @@ export const SteamInventory: React.FC = () => {
               {items.length > 0 && (
                 <button
                   onClick={handleUpdatePrices}
-                  className="primary-btn btn-black text-sm px-3 py-1 flex items-center"
+                  className="primary-btn btn-black"
                   disabled={updatingPrices || updatingFloats}
                 >
                   {updatingPrices ? (
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                   ) : (
-                    <RefreshIcon fontSize="small" className="mr-1" />
+                    <RefreshIcon fontSize="inherit" />
                   )}
                   {updatingPrices ? "Updating..." : "Update Prices"}
                 </button>
@@ -755,13 +755,13 @@ export const SteamInventory: React.FC = () => {
               {items.length > 0 && (
                 <button
                   onClick={handleUpdateFloats}
-                  className="primary-btn btn-black text-sm px-3 py-1 flex items-center"
+                  className="primary-btn btn-black"
                   disabled={updatingFloats || updatingPrices}
                 >
                   {updatingFloats ? (
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                   ) : (
-                    <RefreshIcon fontSize="small" className="mr-1" />
+                    <RefreshIcon fontSize="inherit" />
                   )}
                   {updatingFloats ? "Updating..." : "Update Float & Pattern"}
                 </button>
@@ -770,7 +770,7 @@ export const SteamInventory: React.FC = () => {
               {/* Filter Toggle Button */}
               <button
                 onClick={clearFilters}
-                className="primary-btn btn-black text-sm px-3 py-1"
+                className="primary-btn btn-black"
                 disabled={
                   !nameFilter &&
                   !rarityFilter &&
@@ -780,7 +780,7 @@ export const SteamInventory: React.FC = () => {
                   sortOrder === "asc"
                 }
               >
-                <DeleteIcon fontSize="small" className="mr-1" />
+                <DeleteIcon fontSize="inherit" />
                 Clear Filters
               </button>
             </div>
@@ -802,7 +802,7 @@ export const SteamInventory: React.FC = () => {
                   value={nameFilter}
                   onChange={(e) => setNameFilter(e.target.value)}
                   placeholder="Filter by name..."
-                  className={inputStyle}
+                  className="input w-full"
                 />
               </div>
 
@@ -814,7 +814,7 @@ export const SteamInventory: React.FC = () => {
                 <select
                   value={rarityFilter}
                   onChange={(e) => setRarityFilter(e.target.value)}
-                  className={inputStyle}
+                  className="select w-full"
                 >
                   <option value="">All Rarities</option>
                   {uniqueRarities.map((rarity) => (
@@ -836,7 +836,7 @@ export const SteamInventory: React.FC = () => {
                       e.target.value as "name" | "rarity" | "price" | "profit"
                     )
                   }
-                  className={inputStyle}
+                  className="select w-full"
                 >
                   <option value="name">Name</option>
                   <option value="rarity">Rarity</option>
@@ -855,7 +855,7 @@ export const SteamInventory: React.FC = () => {
                   onChange={(e) =>
                     setSortOrder(e.target.value as "asc" | "desc")
                   }
-                  className={inputStyle}
+                  className="select w-full"
                 >
                   <option value="asc">
                     {sortBy === "name"
