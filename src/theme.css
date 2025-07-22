@@ -101,7 +101,7 @@
   }
   .nav-primary {
     @apply cursor-pointer inline-flex items-center px-4 py-2 rounded-md font-medium transition-all duration-200 ease-in-out;
-    @apply bg-tertiary text-white hover:bg-hover-bg;
+    @apply bg-tertiary text-white hover:bg-hover-bg hover:scale-95;
   }
   .nav-primary.active {
     @apply text-primary bg-white;
@@ -136,7 +136,6 @@
   .stats-icon-gold {
     @apply bg-gold;
   }
-
   .stats-icon-red {
     @apply bg-red;
   }
@@ -152,7 +151,6 @@
   .table-row:hover {
     @apply bg-hover-bg;
   }
-
   .table-row:last-child {
     @apply border-b-0;
   }
@@ -165,6 +163,10 @@
   .alert-warning {
     @apply bg-gold/10 border border-gold text-gold rounded-md p-4;
   }
+}
+
+.recharts-pie * {
+  outline: none !important;
 }
 
 /* Utility Classes */

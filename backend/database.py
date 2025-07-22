@@ -10,6 +10,7 @@ import logging
 import os
 from dotenv import load_dotenv
 from pymongo.errors import DuplicateKeyError
+import requests
 
 # Load environment variables
 load_dotenv()
@@ -247,6 +248,18 @@ class CardModel:
     def get_portfolio_summary(self, user_id: str = None) -> Dict:
         """Calculate portfolio summary for a user including Steam inventory"""
         try:
+            # Fetch EUR conversion rates
+            conversion_rates = {"USD": 1.0} 
+            try:
+                response = requests.get(
+                    "https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/eur.json"
+                )
+                if response.ok:
+                    data = response.json()
+                    conversion_rates.update(data.get("eur", {}))
+            except Exception as e:
+                logger.warning(f"Failed to fetch conversion rates: {e}")
+
             match_stage = {}
             if user_id:
                 match_stage['user_id'] = user_id
@@ -258,16 +271,38 @@ class CardModel:
                         '_id': None,
                         'total_cards': {'$sum': '$quantity'},
                         'total_value': {
-                            '$sum': {'$multiply': ['$current_price', '$quantity']}
+                            '$sum': {
+                                '$multiply': [
+                                    {
+                                        '$cond': [
+                                            {'$eq': ['$currency', 'EUR']},
+                                            {'$multiply': ['$current_price', conversion_rates.get('$currency', 1.0)]},
+                                            '$current_price'
+                                        ]
+                                    },
+                                    '$quantity'
+                                ]
+                            }
                         },
                         'total_investment': {
-                            '$sum': {'$multiply': ['$price_bought', '$quantity']}
+                            '$sum': {
+                                '$multiply': [
+                                    {
+                                        '$cond': [
+                                            {'$eq': ['$currency', 'EUR']},
+                                            {'$multiply': ['$price_bought', conversion_rates.get('$currency', 1.0)]},
+                                            '$price_bought'
+                                        ]
+                                    },
+                                    '$quantity'
+                                ]
+                            }
                         },
                         'cards': {'$push': '$$ROOT'}
                     }
                 }
             ]
-            
+
             result = list(self.collection.aggregate(pipeline))
             
             # Get Steam inventory stats and items if user_id is provided
@@ -298,8 +333,12 @@ class CardModel:
                             total_value = 0
                             total_investment = 0
                             for asset in assets:
-                                current_value = asset.get('current_price', 0) * asset.get('quantity', 0)
-                                investment = asset.get('price_bought', 0) * asset.get('quantity', 0)
+                                if asset.get('currency') == 'USD':
+                                    conversion_rate = conversion_rates.get('USD', 1.0)
+                                else:
+                                    conversion_rate = 1.0
+                                current_value = asset.get('current_price', 0) * asset.get('quantity', 0) * conversion_rate
+                                investment = asset.get('price_bought', 0) * asset.get('quantity', 0) * conversion_rate
                                 total_value += current_value
                                 total_investment += investment
                             

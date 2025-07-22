@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   PieChart,
   Pie,
@@ -7,7 +7,7 @@ import {
   Legend,
   Sector,
 } from "recharts";
-import type { PortfolioSummary } from "../../types/assets";
+import type { AssetType, PortfolioSummary } from "../../types/assets";
 
 // Material Icons
 import AttachMoneyIcon from "@mui/icons-material/AttachMoney";
@@ -17,11 +17,19 @@ import PercentIcon from "@mui/icons-material/Percent";
 
 interface PortfolioSummaryProps {
   summary: PortfolioSummary;
+  onSectionChange?: (
+    section: AssetType | "dashboard" | "scrapers" | "users"
+  ) => void;
 }
 
 const PortfolioSummaryComponent: React.FC<PortfolioSummaryProps> = ({
   summary,
+  onSectionChange,
 }) => {
+  const [selectedAssetType, setSelectedAssetType] = useState<string | null>(
+    null
+  );
+
   const formatCurrency = (value: number) => `€${value.toFixed(2)}`;
   const formatPercentage = (value: number) => `${value.toFixed(2)}%`;
 
@@ -43,6 +51,8 @@ const PortfolioSummaryComponent: React.FC<PortfolioSummaryProps> = ({
       percentage: breakdown.percentage,
       count: breakdown.count,
     }));
+
+  console.log("Portfolio Summary Data:", summary);
 
   // Custom active sector renderer
   const renderActiveShape = (props: any) => {
@@ -145,6 +155,15 @@ const PortfolioSummaryComponent: React.FC<PortfolioSummaryProps> = ({
     return themeColors[name as keyof typeof themeColors] || "#6B7280";
   };
 
+  const handlePieClick = (data: any, index: number) => {
+    if (!onSectionChange) return;
+    const assetTypes = ["cards", "stocks", "etfs", "crypto", "steam"];
+    const section = assetTypes[index];
+    if (section) {
+      onSectionChange(section as AssetType);
+    }
+  };
+
   return (
     <div className="mb-8">
       <div className="card">
@@ -237,14 +256,18 @@ const PortfolioSummaryComponent: React.FC<PortfolioSummaryProps> = ({
           </div>
 
           {/* Asset Breakdown */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <div className="grid">
             <div>
               <h3 className="text-lg font-semibold text-primary mb-4">
                 Asset Allocation
               </h3>
               {pieChartData.length > 0 ? (
-                <div className="h-80 w-full bg-primary border border-primary rounded-lg">
-                  <ResponsiveContainer width="100%" height="100%">
+                <div className="h-128 w-full bg-primary border border-primary rounded-lg focus:outline-0">
+                  <ResponsiveContainer
+                    width="100%"
+                    height="100%"
+                    className="focus:outline-0"
+                  >
                     <PieChart>
                       <Pie
                         activeShape={renderActiveShape}
@@ -256,11 +279,14 @@ const PortfolioSummaryComponent: React.FC<PortfolioSummaryProps> = ({
                         fill="#8884d8"
                         stroke="none"
                         dataKey="value"
+                        onClick={handlePieClick}
+                        className="focus:outline-0 cursor-pointer"
                       >
                         {pieChartData.map((entry, index) => (
                           <Cell
                             key={`cell-${index}`}
                             fill={getColorForAsset(entry.name)}
+                            className="focus:outline-0 cursor-pointer"
                           />
                         ))}
                       </Pie>
@@ -293,7 +319,7 @@ const PortfolioSummaryComponent: React.FC<PortfolioSummaryProps> = ({
                 </div>
               )}
             </div>
-
+            {/*
             <div>
               <h3 className="text-lg font-semibold text-primary mb-4">
                 Performance
@@ -356,6 +382,7 @@ const PortfolioSummaryComponent: React.FC<PortfolioSummaryProps> = ({
                 )}
               </div>
             </div>
+            */}
           </div>
         </div>
       </div>

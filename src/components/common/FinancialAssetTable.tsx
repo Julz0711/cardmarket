@@ -97,6 +97,11 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
   const [deleteMessage, setDeleteMessage] = useState<string>("");
   const [deleteError, setDeleteError] = useState<string>("");
 
+  // Update prices states
+  const [isUpdatingPrices, setIsUpdatingPrices] = useState(false);
+  const [updatePricesMessage, setUpdatePricesMessage] = useState<string>("");
+  const [updatePricesError, setUpdatePricesError] = useState<string>("");
+
   // Format as EUR, fallback to USD if rate not available
   // If asset has currency and it's not EUR, convert using eurRate
   const formatCurrency = (value: number, currency?: string) => {
@@ -440,7 +445,11 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
     const totalPortfolioValue = getTotalValue();
     if (totalPortfolioValue === 0) return 0;
 
-    const assetValue = asset.current_price * asset.quantity;
+    const assetValue =
+      asset.currency && asset.currency !== "EUR"
+        ? asset.current_price * eurRate * asset.quantity
+        : asset.current_price * asset.quantity;
+
     return (assetValue / totalPortfolioValue) * 100;
   };
 
@@ -493,6 +502,32 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
       );
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  const handleUpdatePrices = async () => {
+    setIsUpdatingPrices(true);
+    setUpdatePricesMessage("");
+    setUpdatePricesError("");
+
+    try {
+      const result = await apiClient.refreshFinancialAssetPrices(assetType);
+      setUpdatePricesMessage(
+        `Successfully updated prices for ${
+          result.updated_count || assets.length
+        } ${assetType}`
+      );
+
+      // Refresh the data
+      if (onDataUpdate) {
+        onDataUpdate();
+      }
+    } catch (error) {
+      setUpdatePricesError(
+        error instanceof Error ? error.message : "Failed to update prices"
+      );
+    } finally {
+      setIsUpdatingPrices(false);
     }
   };
 
@@ -554,6 +589,13 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
             </h3>
             <div className="flex space-x-3">
               <button
+                onClick={handleUpdatePrices}
+                disabled={isUpdatingPrices || assets.length === 0}
+                className="primary-btn btn-blue disabled:bg-gray-600 disabled:cursor-not-allowed"
+              >
+                {isUpdatingPrices ? "Updating..." : "Update Prices"}
+              </button>
+              <button
                 onClick={handleAddNew}
                 className="primary-btn btn-green disabled:bg-gray-600 disabled:cursor-not-allowed"
               >
@@ -596,6 +638,16 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
           {deleteError && (
             <div className="mb-4 p-4 bg-red-800 border border-red-600 text-red-200 rounded">
               {deleteError}
+            </div>
+          )}
+          {updatePricesMessage && (
+            <div className="mb-4 p-4 bg-green-800 border border-green-600 text-green-200 rounded">
+              {updatePricesMessage}
+            </div>
+          )}
+          {updatePricesError && (
+            <div className="mb-4 p-4 bg-red-800 border border-red-600 text-red-200 rounded">
+              {updatePricesError}
             </div>
           )}
 

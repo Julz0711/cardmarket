@@ -264,7 +264,12 @@ function AppContent({
 
     switch (activeSection) {
       case "dashboard":
-        return <PortfolioSummary summary={portfolioSummary} />;
+        return (
+          <PortfolioSummary
+            summary={portfolioSummary}
+            onSectionChange={setActiveSection}
+          />
+        );
       case "cards":
         return (
           <AssetTable
