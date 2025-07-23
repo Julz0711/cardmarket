@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+
+import React from "react";
 import {
   PieChart,
   Pie,
@@ -26,10 +27,6 @@ const PortfolioSummaryComponent: React.FC<PortfolioSummaryProps> = ({
   summary,
   onSectionChange,
 }) => {
-  const [selectedAssetType, setSelectedAssetType] = useState<string | null>(
-    null
-  );
-
   const formatCurrency = (value: number) => `€${value.toFixed(2)}`;
   const formatPercentage = (value: number) => `${value.toFixed(2)}%`;
 
@@ -155,7 +152,7 @@ const PortfolioSummaryComponent: React.FC<PortfolioSummaryProps> = ({
     return themeColors[name as keyof typeof themeColors] || "#6B7280";
   };
 
-  const handlePieClick = (data: any, index: number) => {
+  const handlePieClick = (index: number) => {
     if (!onSectionChange) return;
     const assetTypes = ["cards", "stocks", "etfs", "crypto", "steam"];
     const section = assetTypes[index];

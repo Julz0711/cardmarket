@@ -1,6 +1,6 @@
 Start Frontend:
 npm run dev
 
-Start backend
+Start Backend:
 cd backend
 python3 app.py
