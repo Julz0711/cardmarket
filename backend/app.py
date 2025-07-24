@@ -1,5 +1,3 @@
-# Import the PriceEmpire Selenium scraper
-from priceempire_selenium_scraper import PriceEmpireSeleniumScraper
 from flask import Flask, jsonify, request, Response
 from flask_cors import CORS
 from datetime import datetime
@@ -9,8 +7,6 @@ from dotenv import load_dotenv
 
 # Import the new modular scrapers
 from scrapers import ScraperManager, ScraperError, ValidationError
-# Import the SkinSnipe.com scraper
-from scrapers.skinsnipe_scraper import SkinSnipeScraper
 
 # Import MongoDB database models
 from database import mongodb, card_model, steam_item_model, financial_asset_model
@@ -19,7 +15,7 @@ from database import mongodb, card_model, steam_item_model, financial_asset_mode
 from yfinance_service import yfinance_service
 
 # Import authentication system
-from auth import user_model, auth_required, optional_auth, JWTManager
+from auth import user_model, auth_required, JWTManager
 
 # Load environment variables
 load_dotenv()

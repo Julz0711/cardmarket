@@ -19,10 +19,176 @@ class PriceInfo:
     market: Optional[str] = None
 
 class SkinSearchScraper:
+    def map_steam_item_to_skinsearch_args(self, item: dict) -> tuple:
+        category = item.get('item_category', '').lower()
+        name = item.get('name', '')
+        condition = item.get('condition', 'FN')
+        args = {}
+        item_type = item.get('item_type', '').lower()
+
+        # --- Prioritize mapping for capsules, cases, and souvenir packages regardless of category ---
+        if 'capsule' in name.lower():
+            args = {'capsule_name': self.norm(name, remove_condition=True)}
+            return 'capsule', args
+        if (
+            'autograph capsule' in item_type
+            or 'patch pack' in item_type
+            or 'sticker capsule' in item_type
+            or 'capsule' in item_type
+            or ('foil' in item_type and 'capsule' in item_type)
+        ):
+            args = {'capsule_name': self.norm(name, remove_condition=True)}
+            return 'capsule', args
+        if 'souvenir package' in item_type:
+            args = {'case_name': self.norm(name, remove_condition=True)}
+            return 'souvenir_package', args
+        if 'base grade container' in item_type or item_type in ['case', 'container'] or category == 'case':
+            args = {'case_name': self.norm(name, remove_condition=True)}
+            return 'case', args
+        if category == 'weapon':
+            if item_type in ['base grade container', 'case', 'container']:
+                return None, None
+            weapon, skin = '', ''
+            clean_name = name
+            if name.lower().startswith('souvenir '):
+                clean_name = name[len('souvenir '):]
+            if name.lower().startswith('stattrak™ '):
+                clean_name = name[len('stattrak™ '):]
+            is_doppler, doppler_type = self.is_doppler_item(clean_name)
+            if is_doppler:
+                if '|' in clean_name:
+                    parts = clean_name.split('|')
+                    weapon = self.norm(parts[0], remove_condition=True)
+                    detected_phase = self.detect_doppler_phase(item)
+                    if detected_phase:
+                        if doppler_type == 'gamma_doppler':
+                            skin = f"gamma_doppler/{detected_phase}"
+                        else:
+                            skin = f"doppler/{detected_phase}"
+                    else:
+                        if doppler_type == 'gamma_doppler':
+                            skin = f"gamma_doppler/phase_1"
+                        else:
+                            skin = f"doppler/phase_1"
+                        args = {'weapon': weapon, 'skin': skin, 'condition': condition, 'variant': 'normal', '_doppler_fallback': True, '_doppler_type': doppler_type}
+                else:
+                    weapon = self.norm(clean_name, remove_condition=True)
+                    skin = 'doppler/phase_1'
+            else:
+                if '|' in clean_name:
+                    parts = clean_name.split('|')
+                    weapon = self.norm(parts[0], remove_condition=True)
+                    raw_skin = parts[1].strip()
+                    skin_no_cond = re.sub(r'\s*\b(factory new|minimal wear|field-tested|well-worn|battle-scarred|fn|mw|ft|ww|bs)\b', '', raw_skin, flags=re.IGNORECASE)
+                    skin_no_cond = re.sub(r'(_factory_new|_minimal_wear|_field_tested|_well_worn|_battle_scarred|_fn|_mw|_ft|_ww|_bs)$', '', skin_no_cond.lower())
+                    skin = self.norm(skin_no_cond, remove_condition=True)
+                else:
+                    weapon = self.norm(clean_name, remove_condition=True)
+                    skin = ''
+            variant = 'normal'
+            if 'stattrak' in name.lower():
+                variant = 'stattrak'
+            elif 'souvenir' in name.lower():
+                variant = 'souvenir'
+            if 'args' not in locals() or not args:
+                args = {'weapon': weapon, 'skin': skin, 'condition': condition, 'variant': variant}
+        elif category == 'glove' or category == 'gloves':
+            glove_type, skin = '', ''
+            if '|' in name:
+                parts = name.split('|')
+                glove_type = self.norm(parts[0], remove_condition=True)
+                raw_skin = parts[1].strip()
+                skin_no_cond = re.sub(r'\s*\([^)]+\)$', '', raw_skin)
+                skin_no_cond = re.sub(r'\s*\b(factory new|minimal wear|field-tested|well-worn|battle-scarred|fn|mw|ft|ww|bs)\b', '', skin_no_cond, flags=re.IGNORECASE)
+                skin = self.norm(skin_no_cond, remove_condition=True)
+            else:
+                glove_type = self.norm(name, remove_condition=True)
+                skin = ''
+            args = {'glove_type': glove_type, 'skin': skin, 'condition': condition}
+        elif category == 'knife':
+            knife_type, skin = '', ''
+            is_doppler, doppler_type = self.is_doppler_item(name)
+            if is_doppler:
+                if '|' in name:
+                    parts = name.split('|')
+                    knife_type = self.norm(parts[0], remove_condition=True)
+                    detected_phase = self.detect_doppler_phase(item)
+                    if detected_phase:
+                        if doppler_type == 'gamma_doppler':
+                            skin = f"gamma_doppler/{detected_phase}"
+                        else:
+                            skin = f"doppler/{detected_phase}"
+                    else:
+                        if doppler_type == 'gamma_doppler':
+                            skin = f"gamma_doppler/phase_1"
+                        else:
+                            skin = f"doppler/phase_1"
+                        variant = 'normal'
+                        if 'stattrak' in name.lower():
+                            variant = 'stattrak'
+                        args = {'knife_type': knife_type, 'skin': skin, 'condition': condition, 'variant': variant, '_doppler_fallback': True, '_doppler_type': doppler_type}
+                else:
+                    knife_type = self.norm(name, remove_condition=True)
+                    skin = 'doppler/phase_1'
+            else:
+                if '|' in name:
+                    parts = name.split('|')
+                    knife_type = self.norm(parts[0], remove_condition=True)
+                    skin = self.norm(parts[1], remove_condition=True)
+                else:
+                    knife_type = self.norm(name, remove_condition=True)
+                    skin = ''
+            variant = 'normal'
+            if 'stattrak' in name.lower():
+                variant = 'stattrak'
+            if 'args' not in locals() or not args:
+                args = {'knife_type': knife_type, 'skin': skin, 'condition': condition, 'variant': variant}
+        elif category == 'case':
+            args = {'case_name': self.norm(name, remove_condition=True)}
+        elif category == 'souvenir_package':
+            args = {'case_name': self.norm(name, remove_condition=True)}
+        elif category == 'capsule':
+            args = {'capsule_name': self.norm(name, remove_condition=True)}
+        elif category == 'sticker':
+            args = {'sticker_name': self.norm(name, remove_condition=True, remove_prefix='sticker_')}
+        elif category == 'charm':
+            args = {'charm_name': self.norm(name, remove_condition=True, remove_prefix='charm_')}
+        elif category == 'music_kit':
+            args = {'music_kit_name': self.norm(name, remove_condition=True, remove_prefix='music_kit_')}
+        elif category == 'agent':
+            args = {'agent_name': self.norm(name, remove_condition=True)}
+        elif category in ['patch', 'pin', 'graffiti']:
+            args = {'item_name': self.norm(name, remove_condition=True, remove_prefix=f'{category}_')}
+        else:
+            return None, None
+        if category == 'gloves':
+            category = 'glove'
+        return category, args
     BASE_URL = 'https://skinsearch.com'
     HEADERS = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36'
     }
+
+    def get_eur_conversion_rate(self, from_currency: str = 'USD') -> float:
+        """
+        Fetches the conversion rate from the given currency to EUR using CDN currency API.
+        Returns 1.0 if the API fails or the currency is already EUR.
+        """
+        if from_currency.upper() == 'EUR':
+            return 1.0
+        try:
+            url = "https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json"
+            resp = requests.get(url, timeout=5)
+            if resp.status_code == 200:
+                data = resp.json()
+                rate = data.get('usd', {}).get('eur')
+                if rate:
+                    logger.info(f"[SkinSearch] Conversion rate USD->EUR: {rate}")
+                    return float(rate)
+        except Exception as e:
+            logger.warning(f"[SkinSearch] Error fetching EUR conversion rate: {e}")
+        logger.warning(f"[SkinSearch] Using fallback conversion rate 1.0 for USD->EUR")
+        return 1.0
     
     # Doppler phase mappings based on finish catalog IDs
     DOPPLER_PHASES = {
@@ -337,6 +503,7 @@ class SkinSearchScraper:
     def fetch_price(self, item_type: str, url: str) -> Optional[PriceInfo]:
         # Retry logic: up to 3 attempts, 15s timeout per attempt
         max_attempts = 3
+        eur_rate = self.get_eur_conversion_rate('USD')
         for attempt in range(1, max_attempts + 1):
             try:
                 # Build API endpoint from item URL
@@ -349,22 +516,14 @@ class SkinSearchScraper:
                     variant = parts[idx+3] if len(parts) > idx+3 else 'normal'
                     api_url = f"{self.BASE_URL}/api/item/weapons/{weapon}/{skin}/{condition}/{variant}"
                 elif item_type == 'knife':
-                    # Knives use /item/weapons/{knife_type}/{skin}/{condition}/normal pattern
                     if 'weapons' in parts:
                         idx = parts.index('weapons') + 1
                         knife = parts[idx] if len(parts) > idx else ''
-                        
-                        # Handle Doppler skins that have slashes (doppler/phase_1, gamma_doppler/emerald)
-                        # Check if the next part after knife looks like a Doppler base
                         skin_parts = []
                         current_idx = idx + 1
-                        
-                        # Look for doppler pattern: doppler or gamma_doppler followed by phase/variant
                         if current_idx < len(parts) and parts[current_idx] in ['doppler', 'gamma_doppler']:
                             doppler_base = parts[current_idx]
                             current_idx += 1
-                            
-                            # Check if next part is a phase/variant
                             if current_idx < len(parts) and parts[current_idx] in ['phase_1', 'phase_2', 'phase_3', 'phase_4', 'ruby', 'sapphire', 'black_pearl', 'emerald']:
                                 phase = parts[current_idx]
                                 skin = f"{doppler_base}/{phase}"
@@ -372,16 +531,12 @@ class SkinSearchScraper:
                             else:
                                 skin = doppler_base
                         else:
-                            # Regular skin without slash
                             skin = parts[current_idx] if current_idx < len(parts) else ''
                             current_idx += 1
-                            
                         condition = parts[current_idx] if current_idx < len(parts) else ''
                         variant = parts[current_idx + 1] if current_idx + 1 < len(parts) else 'normal'
-                        
                         api_url = f"{self.BASE_URL}/api/item/weapons/{knife}/{skin}/{condition}/{variant}"
                     else:
-                        # Fallback for non-weapons knife pattern (shouldn't happen but just in case)
                         idx = parts.index('item') + 1
                         knife = parts[idx]
                         skin = parts[idx+1] if len(parts) > idx+1 else ''
@@ -389,7 +544,6 @@ class SkinSearchScraper:
                         variant = parts[idx+3] if len(parts) > idx+3 else 'normal'
                         api_url = f"{self.BASE_URL}/api/item/weapons/{knife}/{skin}/{condition}/{variant}"
                 elif item_type == 'glove':
-                    # Gloves use /item/weapons/{glove_type}/{skin}/{condition}/normal pattern
                     if 'weapons' in parts:
                         idx = parts.index('weapons') + 1
                         glove = parts[idx] if len(parts) > idx else ''
@@ -397,7 +551,6 @@ class SkinSearchScraper:
                         condition = parts[idx+2] if len(parts) > idx+2 else ''
                         api_url = f"{self.BASE_URL}/api/item/weapons/{glove}/{skin}/{condition}/normal"
                     else:
-                        # Fallback for non-weapons glove pattern (shouldn't happen but just in case)
                         idx = parts.index('item') + 1
                         glove = parts[idx] if len(parts) > idx else ''
                         skin = parts[idx+1] if len(parts) > idx+1 else ''
@@ -432,7 +585,6 @@ class SkinSearchScraper:
                 markets = ["csfloat","bitskins","csdeals","csmoney","skinport","skinbaron","dmarket","skinbid","buff163","tradeit","steam","pirateswap","skinsmonkey","skinvault"]
                 import json
                 api_url += f"/?l=en_US&m={json.dumps(markets)}"
-                # Log item type and API URL before request
                 logger.info(f"[SkinSearch] Fetching price for item_type: {item_type}, API URL: {api_url} (attempt {attempt})")
                 resp = requests.get(api_url, headers=self.HEADERS, timeout=15)
                 if resp.status_code != 200:
@@ -441,7 +593,6 @@ class SkinSearchScraper:
                 if not resp.text or resp.text.strip() == "":
                     logger.warning(f"[SkinSearch] Empty response for API URL: {api_url} (attempt {attempt})")
                     continue
-                price = None
                 market_url = None
                 resp_text = resp.text.strip()
                 if resp_text and (resp_text.startswith('{') or resp_text.startswith('[')):
@@ -452,14 +603,12 @@ class SkinSearchScraper:
                         match = re.search(r'"market":"csfloat","price":(\d+)', resp.text)
                         if match:
                             price = int(match.group(1))
-                            price_eur = round(price * 0.92, 2)
+                            price_eur = round(price * eur_rate, 2)
                             return PriceInfo(price=price_eur, url=None, market="csfloat")
                         logger.error(f"[SkinSearch] Error parsing JSON and extracting price: {e} (attempt {attempt})")
                         continue
                 else:
                     continue
-                
-                # First try to get csfloat price from listings (most common case)
                 if "item" in data and "listings" in data["item"]:
                     listings = data["item"].get("listings", [])
                     for entry in listings:
@@ -469,16 +618,12 @@ class SkinSearchScraper:
                             market_url = None
                             logger.info(f"[SkinSearch] Found csfloat price: {price} for {api_url}")
                             break
-                
-                # Fallback: check if there's a markets object (alternative structure)
                 if price is None and "markets" in data:
                     csfloat = data["markets"].get("csfloat")
                     if csfloat and "price" in csfloat:
                         price = csfloat["price"]
                         market_url = csfloat.get("url")
                         logger.info(f"[SkinSearch] Found csfloat price in markets: {price} for {api_url}")
-                
-                # Last fallback: use prices array with quality matching
                 if price is None and "prices" in data:
                     import re
                     m = re.search(r'/([A-Z]{2})(?:/|$)', url)
@@ -490,12 +635,12 @@ class SkinSearchScraper:
                             logger.info(f"[SkinSearch] Found price in prices array: {price} for quality {requested_quality}")
                             break
                 if price is not None:
-                    if isinstance(price, int) and price > 10:
+                    # Always treat integer price as cents
+                    if isinstance(price, int):
                         price = price / 100.0
-                    price_eur = round(price * 0.92, 2)
+                    price_eur = round(float(price) * eur_rate, 2)
                     logger.info(f"[SkinSearch] Successfully extracted price: {price_eur} EUR from {api_url}")
                     return PriceInfo(price=price_eur, url=market_url, market="csfloat")
-                
                 logger.warning(f"[SkinSearch] No csfloat price found for API URL: {api_url} (attempt {attempt})")
                 logger.debug(f"[SkinSearch] API response structure for {api_url} (attempt {attempt}):")
                 logger.debug(f"[SkinSearch] - Has 'item' key: {'item' in data}")
@@ -503,213 +648,13 @@ class SkinSearchScraper:
                 logger.debug(f"[SkinSearch] - Has 'prices' key: {'prices' in data}")
                 if "item" in data and "listings" in data["item"]:
                     listings = data["item"]["listings"]
-                    available_markets = [entry.get("market", "unknown") for entry in listings[:5]]  # Show first 5
+                    available_markets = [entry.get("market", "unknown") for entry in listings[:5]]
                     logger.debug(f"[SkinSearch] - Available markets in listings (first 5): {available_markets}")
-                logger.debug(f"[SkinSearch] Full API response for {api_url} (attempt {attempt}):\n{resp.text[:1000]}...")  # Truncate to first 1000 chars
+                logger.debug(f"[SkinSearch] Full API response for {api_url} (attempt {attempt}):\n{resp.text[:1000]}...")
             except Exception as e:
                 logger.error(f"[SkinSearch] Error fetching price: {e} (attempt {attempt})")
                 continue
         return None
-
-    def map_steam_item_to_skinsearch_args(self, item: dict) -> tuple:
-        category = item.get('item_category', '').lower()
-        name = item.get('name', '')
-        condition = item.get('condition', 'FN')
-        args = {}
-        category = item.get('item_category', '').lower()
-        item_type = item.get('item_type', '').lower()
-        name = item.get('name', '')
-        condition = item.get('condition', 'FN')
-        args = {}
-
-        # --- Prioritize mapping for capsules, cases, and souvenir packages regardless of category ---
-        # Capsules: if name contains 'capsule' (case-insensitive), always map as capsule
-        if 'capsule' in name.lower():
-            args = {'capsule_name': self.norm(name, remove_condition=True)}
-            return 'capsule', args
-        # Capsules: includes autograph capsule, patch pack, sticker capsule, capsule, and any item type containing 'foil' and 'capsule'
-        if (
-            'autograph capsule' in item_type
-            or 'patch pack' in item_type
-            or 'sticker capsule' in item_type
-            or 'capsule' in item_type
-            or ('foil' in item_type and 'capsule' in item_type)
-        ):
-            args = {'capsule_name': self.norm(name, remove_condition=True)}
-            return 'capsule', args
-        # Souvenir Packages
-        if 'souvenir package' in item_type:
-            args = {'case_name': self.norm(name, remove_condition=True)}
-            return 'souvenir_package', args
-        # Cases (Base Grade Container, Case, Container)
-        if 'base grade container' in item_type or item_type in ['case', 'container'] or category == 'case':
-            args = {'case_name': self.norm(name, remove_condition=True)}
-            return 'case', args
-        # Weapons
-        if category == 'weapon':
-            # Avoid mapping containers as weapons
-            if item_type in ['base grade container', 'case', 'container']:
-                return None, None
-            weapon, skin = '', ''
-            # Remove 'souvenir' and 'stattrak' from weapon name
-            clean_name = name
-            # Remove prefixes from name (e.g. 'Souvenir SSG 08 | Carbon Fiber')
-            if name.lower().startswith('souvenir '):
-                clean_name = name[len('souvenir '):]
-            if name.lower().startswith('stattrak™ '):
-                clean_name = name[len('stattrak™ '):]
-                
-            # Special handling for Doppler knives
-            is_doppler, doppler_type = self.is_doppler_item(clean_name)
-            if is_doppler:
-                logger.info(f"[SkinSearch] Detected {doppler_type} knife: {clean_name}")
-                
-                if '|' in clean_name:
-                    parts = clean_name.split('|')
-                    weapon = self.norm(parts[0], remove_condition=True)
-                    
-                    # Try to detect the specific Doppler phase
-                    detected_phase = self.detect_doppler_phase(item)
-                    
-                    if detected_phase:
-                        # Use detected phase
-                        if doppler_type == 'gamma_doppler':
-                            skin = f"gamma_doppler/{detected_phase}"
-                        else:
-                            skin = f"doppler/{detected_phase}"
-                        logger.info(f"[SkinSearch] Using detected Doppler phase: {skin}")
-                    else:
-                        # Phase detection failed - we'll need to try all variants
-                        # For now, use a default phase and mark for fallback handling
-                        if doppler_type == 'gamma_doppler':
-                            skin = f"gamma_doppler/phase_1"  # Default fallback
-                        else:
-                            skin = f"doppler/phase_1"  # Default fallback
-                        logger.warning(f"[SkinSearch] Could not detect Doppler phase, using default: {skin}")
-                        # Mark this item for special handling
-                        args = {'weapon': weapon, 'skin': skin, 'condition': condition, 'variant': variant, '_doppler_fallback': True, '_doppler_type': doppler_type}
-                else:
-                    # Shouldn't happen for Doppler items, but handle gracefully
-                    weapon = self.norm(clean_name, remove_condition=True)
-                    skin = 'doppler/phase_1'
-            else:
-                # Normal weapon processing
-                if '|' in clean_name:
-                    parts = clean_name.split('|')
-                    weapon = self.norm(parts[0], remove_condition=True)
-                    # Remove condition suffix from skin name before normalization
-                    raw_skin = parts[1].strip()
-                    import re
-                    skin_no_cond = re.sub(r'\s*\b(factory new|minimal wear|field-tested|well-worn|battle-scarred|fn|mw|ft|ww|bs)\b', '', raw_skin, flags=re.IGNORECASE)
-                    skin_no_cond = re.sub(r'(_factory_new|_minimal_wear|_field_tested|_well_worn|_battle_scarred|_fn|_mw|_ft|_ww|_bs)$', '', skin_no_cond.lower())
-                    skin = self.norm(skin_no_cond, remove_condition=True)
-                else:
-                    weapon = self.norm(clean_name, remove_condition=True)
-                    skin = ''
-                    
-            variant = 'normal'
-            if 'stattrak' in name.lower():
-                variant = 'stattrak'
-            elif 'souvenir' in name.lower():
-                variant = 'souvenir'
-            
-            # Set args if not already set by Doppler handling
-            if 'args' not in locals() or not args:
-                args = {'weapon': weapon, 'skin': skin, 'condition': condition, 'variant': variant}
-        elif category == 'glove' or category == 'gloves':
-            glove_type, skin = '', ''
-            if '|' in name:
-                parts = name.split('|')
-                glove_type = self.norm(parts[0], remove_condition=True)
-                # Remove condition from skin name (e.g., "(Field-Tested)")
-                raw_skin = parts[1].strip()
-                import re
-                skin_no_cond = re.sub(r'\s*\([^)]+\)$', '', raw_skin)  # Remove condition in parentheses
-                skin_no_cond = re.sub(r'\s*\b(factory new|minimal wear|field-tested|well-worn|battle-scarred|fn|mw|ft|ww|bs)\b', '', skin_no_cond, flags=re.IGNORECASE)
-                skin = self.norm(skin_no_cond, remove_condition=True)
-            else:
-                glove_type = self.norm(name, remove_condition=True)
-                skin = ''
-            args = {'glove_type': glove_type, 'skin': skin, 'condition': condition}
-        elif category == 'knife':
-            knife_type, skin = '', ''
-            
-            # Special handling for Doppler knives
-            is_doppler, doppler_type = self.is_doppler_item(name)
-            if is_doppler:
-                logger.info(f"[SkinSearch] Detected {doppler_type} knife: {name}")
-                
-                if '|' in name:
-                    parts = name.split('|')
-                    knife_type = self.norm(parts[0], remove_condition=True)
-                    
-                    # Try to detect the specific Doppler phase
-                    detected_phase = self.detect_doppler_phase(item)
-                    
-                    if detected_phase:
-                        # Use detected phase
-                        if doppler_type == 'gamma_doppler':
-                            skin = f"gamma_doppler/{detected_phase}"
-                        else:
-                            skin = f"doppler/{detected_phase}"
-                        logger.info(f"[SkinSearch] Using detected Doppler phase: {skin}")
-                    else:
-                        # Phase detection failed - use default and mark for fallback
-                        if doppler_type == 'gamma_doppler':
-                            skin = f"gamma_doppler/phase_1"  # Default fallback
-                        else:
-                            skin = f"doppler/phase_1"  # Default fallback
-                        logger.warning(f"[SkinSearch] Could not detect Doppler phase, using default: {skin}")
-                        
-                        # Mark for fallback processing and set args early
-                        variant = 'normal'
-                        if 'stattrak' in name.lower():
-                            variant = 'stattrak'
-                        args = {'knife_type': knife_type, 'skin': skin, 'condition': condition, 'variant': variant, '_doppler_fallback': True, '_doppler_type': doppler_type}
-                else:
-                    knife_type = self.norm(name, remove_condition=True)
-                    skin = 'doppler/phase_1'
-            else:
-                # Normal knife processing
-                if '|' in name:
-                    parts = name.split('|')
-                    knife_type = self.norm(parts[0], remove_condition=True)
-                    skin = self.norm(parts[1], remove_condition=True)
-                else:
-                    knife_type = self.norm(name, remove_condition=True)
-                    skin = ''
-                    
-            variant = 'normal'
-            if 'stattrak' in name.lower():
-                variant = 'stattrak'
-                
-            # Set args if not already set by Doppler handling
-            if 'args' not in locals() or not args:
-                args = {'knife_type': knife_type, 'skin': skin, 'condition': condition, 'variant': variant}
-        elif category == 'case':
-            args = {'case_name': self.norm(name, remove_condition=True)}
-        elif category == 'souvenir_package':
-            args = {'case_name': self.norm(name, remove_condition=True)}
-        elif category == 'capsule':
-            args = {'capsule_name': self.norm(name, remove_condition=True)}
-        elif category == 'sticker':
-            args = {'sticker_name': self.norm(name, remove_condition=True, remove_prefix='sticker_')}
-        elif category == 'charm':
-            args = {'charm_name': self.norm(name, remove_condition=True, remove_prefix='charm_')}
-        elif category == 'music_kit':
-            args = {'music_kit_name': self.norm(name, remove_condition=True, remove_prefix='music_kit_')}
-        elif category == 'agent':
-            args = {'agent_name': self.norm(name, remove_condition=True)}
-        elif category in ['patch', 'pin', 'graffiti']:
-            args = {'item_name': self.norm(name, remove_condition=True, remove_prefix=f'{category}_')}
-        else:
-            return None, None
-        
-        # Normalize category names to singular for consistency
-        if category == 'gloves':
-            category = 'glove'
-        
-        return category, args
 
     def scrape_steam_item(self, item: dict) -> Optional[PriceInfo]:
         item_type, url_args = self.map_steam_item_to_skinsearch_args(item)

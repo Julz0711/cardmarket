@@ -33,7 +33,7 @@ class ScraperManager:
         # Initialize scrapers
         self.scrapers: Dict[str, BaseScraper] = {
             'cards': TradingCardsScraper(),
-            'steam': SteamInventoryScraper()
+            'steam': SteamInventoryScraper(),
         }
         
         self.logger.info("ScraperManager initialized with scrapers: %s", list(self.scrapers.keys()))
@@ -102,18 +102,18 @@ class ScraperManager:
                                 number_to=number_to)
     
     def get_scraper_status(self) -> Dict[str, Dict[str, Any]]:
-        """Get status information for all scrapers"""
+        """Get status information for all scrapers, including running state"""
         status = {}
-        
         for scraper_type, scraper in self.scrapers.items():
+            running = getattr(scraper, 'is_running', False)
             status[scraper_type] = {
                 'name': scraper.name,
                 'available': True,
                 'requires_api_key': self._requires_api_key(scraper_type),
                 'has_api_key': self._has_required_api_key(scraper_type),
-                'last_used': getattr(scraper, 'last_used', None)
+                'last_used': getattr(scraper, 'last_used', None),
+                'running': running
             }
-        
         return status
     
     def _requires_api_key(self, scraper_type: str) -> bool:

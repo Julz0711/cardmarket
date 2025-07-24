@@ -246,10 +246,10 @@ class CardModel:
             return 0
     
     def get_portfolio_summary(self, user_id: str = None) -> Dict:
-        """Calculate portfolio summary for a user including Steam inventory"""
+        """Calculate portfolio summary for a user including all portfolio assets (cards, steam, stocks, etfs, crypto)"""
         try:
             # Fetch EUR conversion rates
-            conversion_rates = {"USD": 1.0} 
+            conversion_rates = {"USD": 1.0}
             try:
                 response = requests.get(
                     "https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/eur.json"
@@ -263,7 +263,7 @@ class CardModel:
             match_stage = {}
             if user_id:
                 match_stage['user_id'] = user_id
-            
+
             pipeline = [
                 {'$match': match_stage},
                 {
@@ -304,28 +304,26 @@ class CardModel:
             ]
 
             result = list(self.collection.aggregate(pipeline))
-            
+
             # Get Steam inventory stats and items if user_id is provided
             steam_stats = {'total_value': 0, 'total_bought': 0, 'total_items': 0}
             steam_items = []
             if user_id:
                 try:
-                    # Use global steam_item_model instance
                     global steam_item_model
                     if steam_item_model:
                         steam_stats = steam_item_model.get_user_stats(user_id)
                         steam_items = steam_item_model.get_user_items(user_id)
                 except Exception as e:
                     logger.warning(f"Failed to get Steam stats: {e}")
-            
+
             # Get financial assets stats and items if user_id is provided
             financial_stats = {'stocks': {'value': 0, 'investment': 0, 'count': 0, 'items': []},
                               'etfs': {'value': 0, 'investment': 0, 'count': 0, 'items': []},
                               'crypto': {'value': 0, 'investment': 0, 'count': 0, 'items': []}}
-            
+
             if user_id:
                 try:
-                    # Use global financial_asset_model instance
                     global financial_asset_model
                     if financial_asset_model:
                         for asset_type in ['stocks', 'etfs', 'crypto']:
@@ -341,7 +339,6 @@ class CardModel:
                                 investment = asset.get('price_bought', 0) * asset.get('quantity', 0) * conversion_rate
                                 total_value += current_value
                                 total_investment += investment
-                            
                             financial_stats[asset_type] = {
                                 'value': total_value,
                                 'investment': total_investment,
@@ -350,158 +347,96 @@ class CardModel:
                             }
                 except Exception as e:
                     logger.warning(f"Failed to get financial assets stats: {e}")
-            
-            if not result:
-                # Only Steam items and/or financial assets, no cards
-                steam_value = steam_stats.get('total_value', 0)
-                steam_investment = steam_stats.get('total_bought', 0)
-                
-                # Add financial assets
-                stocks_value = financial_stats['stocks']['value']
-                stocks_investment = financial_stats['stocks']['investment']
-                etfs_value = financial_stats['etfs']['value'] 
-                etfs_investment = financial_stats['etfs']['investment']
-                crypto_value = financial_stats['crypto']['value']
-                crypto_investment = financial_stats['crypto']['investment']
-                
-                total_value = steam_value + stocks_value + etfs_value + crypto_value
-                total_investment = steam_investment + stocks_investment + etfs_investment + crypto_investment
-                profit_loss = total_value - total_investment
-                profit_loss_percentage = (profit_loss / total_investment * 100) if total_investment > 0 else 0
-                
-                # Calculate performers from all asset types
-                all_performers = []
-                
-                # Steam performers
-                steam_performers = self._calculate_performers(steam_items, 'steam')
-                all_performers.extend(steam_performers['all'])
-                
-                # Financial asset performers
-                for asset_type in ['stocks', 'etfs', 'crypto']:
-                    financial_performers = self._calculate_performers(financial_stats[asset_type]['items'], asset_type)
-                    all_performers.extend(financial_performers['all'])
-                
-                # Sort all performers
-                all_performers.sort(key=lambda x: x['profit_loss_percentage'], reverse=True)
-                top_performers = all_performers[:3]
-                worst_performers = all_performers[-3:] if len(all_performers) >= 3 else []
-                
-                # Calculate percentages
-                steam_percentage = (steam_value / total_value * 100) if total_value > 0 else 0
-                stocks_percentage = (stocks_value / total_value * 100) if total_value > 0 else 0
-                etfs_percentage = (etfs_value / total_value * 100) if total_value > 0 else 0
-                crypto_percentage = (crypto_value / total_value * 100) if total_value > 0 else 0
-                
-                return {
-                    'total_portfolio_value': total_value,
-                    'total_investment': total_investment,
-                    'total_profit_loss': profit_loss,
-                    'total_profit_loss_percentage': profit_loss_percentage,
-                    'asset_breakdown': {
-                        'cards': {'value': 0, 'percentage': 0, 'count': 0},
-                        'steam': {'value': steam_value, 'percentage': steam_percentage, 'count': steam_stats.get('total_items', 0)},
-                        'stocks': {'value': stocks_value, 'percentage': stocks_percentage, 'count': financial_stats['stocks']['count']},
-                        'etfs': {'value': etfs_value, 'percentage': etfs_percentage, 'count': financial_stats['etfs']['count']},
-                        'crypto': {'value': crypto_value, 'percentage': crypto_percentage, 'count': financial_stats['crypto']['count']}
-                    },
-                    'top_performers': top_performers,
-                    'worst_performers': worst_performers
-                }
-            
-            data = result[0]
-            cards_value = data['total_value']
-            cards_investment = data['total_investment']
+
+            # Collect all items for performance calculation, and set asset_type for each
+            all_items = []
+            # Add cards
+            if result:
+                for card in result[0].get('cards', []):
+                    card['asset_type'] = 'card'
+                    all_items.append(card)
+            # Add steam items
+            for steam in steam_items:
+                steam['asset_type'] = 'steam'
+                all_items.append(steam)
+            # Add financial assets
+            for asset_type in ['stocks', 'etfs', 'crypto']:
+                for asset in financial_stats[asset_type]['items']:
+                    asset['asset_type'] = asset_type
+                    all_items.append(asset)
+
+            # Calculate performers across all asset types
+            all_performers = self._calculate_performers(all_items, 'portfolio')
+            performers_list = all_performers['all']
+            performers_list.sort(key=lambda x: x['profit_loss_percentage'], reverse=True)
+            top_performers = performers_list[:3]
+            worst_performers = performers_list[-3:] if len(performers_list) >= 3 else []
+
+            # Calculate values and breakdowns
+            cards_value = result[0]['total_value'] if result else 0
+            cards_investment = result[0]['total_investment'] if result else 0
+            cards_count = result[0]['total_cards'] if result else 0
             steam_value = steam_stats.get('total_value', 0)
             steam_investment = steam_stats.get('total_bought', 0)
-            
-            # Add financial assets
+            steam_count = steam_stats.get('total_items', 0)
             stocks_value = financial_stats['stocks']['value']
             stocks_investment = financial_stats['stocks']['investment']
-            etfs_value = financial_stats['etfs']['value'] 
+            stocks_count = financial_stats['stocks']['count']
+            etfs_value = financial_stats['etfs']['value']
             etfs_investment = financial_stats['etfs']['investment']
+            etfs_count = financial_stats['etfs']['count']
             crypto_value = financial_stats['crypto']['value']
             crypto_investment = financial_stats['crypto']['investment']
-            
+            crypto_count = financial_stats['crypto']['count']
+
             total_value = cards_value + steam_value + stocks_value + etfs_value + crypto_value
             total_investment = cards_investment + steam_investment + stocks_investment + etfs_investment + crypto_investment
             profit_loss = total_value - total_investment
             profit_loss_percentage = (profit_loss / total_investment * 100) if total_investment > 0 else 0
-            
-            # Calculate performers across all asset types
-            all_performers = []
-            
-            # Add card performers
-            card_performers = self._calculate_performers(data['cards'], 'card')
-            all_performers.extend(card_performers['all'])
-            logger.info(f"Card performers found: {len(card_performers['all'])}")
-            
-            # Add steam performers
-            steam_performers = self._calculate_performers(steam_items, 'steam')
-            all_performers.extend(steam_performers['all'])
-            logger.info(f"Steam performers found: {len(steam_performers['all'])}")
-            
-            # Add financial asset performers
-            for asset_type in ['stocks', 'etfs', 'crypto']:
-                financial_performers = self._calculate_performers(financial_stats[asset_type]['items'], asset_type)
-                all_performers.extend(financial_performers['all'])
-                logger.info(f"{asset_type.capitalize()} performers found: {len(financial_performers['all'])}")
-            
-            logger.info(f"Total performers: {len(all_performers)}")
-            
-            # Sort all performers by profit/loss percentage
-            all_performers.sort(key=lambda x: x['profit_loss_percentage'], reverse=True)
-            
-            # Get top 3 and worst 3
-            top_performers = all_performers[:3]  # Best performers (highest %)
-            worst_performers = all_performers[-3:] if len(all_performers) >= 3 else []  # Worst performers (lowest %)
-            
-            logger.info(f"Top 3 performers: {[p['name'] + ': ' + str(round(p['profit_loss_percentage'], 2)) + '%' for p in top_performers]}")
-            logger.info(f"Worst 3 performers: {[p['name'] + ': ' + str(round(p['profit_loss_percentage'], 2)) + '%' for p in worst_performers]}")
-            
+
             # Calculate asset breakdown percentages
             cards_percentage = (cards_value / total_value * 100) if total_value > 0 else 0
             steam_percentage = (steam_value / total_value * 100) if total_value > 0 else 0
             stocks_percentage = (stocks_value / total_value * 100) if total_value > 0 else 0
             etfs_percentage = (etfs_value / total_value * 100) if total_value > 0 else 0
             crypto_percentage = (crypto_value / total_value * 100) if total_value > 0 else 0
-            
+
             return {
                 'total_portfolio_value': total_value,
                 'total_investment': total_investment,
                 'total_profit_loss': profit_loss,
                 'total_profit_loss_percentage': profit_loss_percentage,
-                'total_cards': data['total_cards'],
+                'total_cards': cards_count,
                 'asset_breakdown': {
                     'cards': {
                         'value': cards_value,
                         'percentage': cards_percentage,
-                        'count': data['total_cards']
+                        'count': cards_count
                     },
                     'stocks': {
                         'value': stocks_value,
                         'percentage': stocks_percentage,
-                        'count': financial_stats['stocks']['count']
+                        'count': stocks_count
                     },
                     'etfs': {
                         'value': etfs_value,
                         'percentage': etfs_percentage,
-                        'count': financial_stats['etfs']['count']
+                        'count': etfs_count
                     },
                     'crypto': {
                         'value': crypto_value,
                         'percentage': crypto_percentage,
-                        'count': financial_stats['crypto']['count']
+                        'count': crypto_count
                     },
                     'steam': {
                         'value': steam_value,
                         'percentage': steam_percentage,
-                        'count': steam_stats.get('total_items', 0)
+                        'count': steam_count
                     }
                 },
                 'top_performers': top_performers,
                 'worst_performers': worst_performers
             }
-            
         except Exception as e:
             logger.error(f"Failed to calculate portfolio summary: {e}")
             return {
@@ -526,9 +461,9 @@ class CardModel:
             price_bought = item.get('price_bought', 0)
             current_price = item.get('current_price', 0)
             name = item.get('name', 'Unknown')
-            
+
             logger.debug(f"{asset_type} item '{name}': bought=${price_bought}, current=${current_price}")
-            
+
             # Include items with purchase price OR Steam items with current value (treat as acquired for free)
             should_include = False
             if price_bought > 0:
@@ -537,21 +472,28 @@ class CardModel:
                 # For Steam items without purchase price, treat as acquired for "free" (show current value as gain)
                 should_include = True
                 price_bought = 0.01  # Use tiny value to avoid division by zero
-            
+
             if should_include:
                 profit_loss_absolute = current_price - price_bought
                 profit_loss_percentage = (profit_loss_absolute / price_bought) * 100
-                
+
+                # Set id for performer: prefer 'id', then '_id', then 'asset_id'
+                performer_id = (
+                    str(item.get('id')) if 'id' in item else
+                    str(item.get('_id')) if '_id' in item else
+                    str(item.get('asset_id', 'unknown'))
+                )
+
                 performer = {
-                    'id': str(item.get('_id', item.get('asset_id', 'unknown'))),
+                    'id': performer_id,
                     'name': name,
                     'current_price': current_price,
                     'price_bought': price_bought if price_bought > 0.01 else 0,  # Show 0 for "free" items
                     'profit_loss_absolute': profit_loss_absolute,
                     'profit_loss_percentage': profit_loss_percentage,
-                    'asset_type': asset_type
+                    'asset_type': item.get('asset_type', asset_type)
                 }
-                
+
                 performers.append(performer)
                 logger.debug(f"Added performer: {name} ({asset_type}) - {profit_loss_percentage:.2f}%")
             else:

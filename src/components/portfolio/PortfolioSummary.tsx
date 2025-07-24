@@ -1,4 +1,3 @@
-
 import React from "react";
 import {
   PieChart,
@@ -259,7 +258,7 @@ const PortfolioSummaryComponent: React.FC<PortfolioSummaryProps> = ({
                 Asset Allocation
               </h3>
               {pieChartData.length > 0 ? (
-                <div className="h-128 w-full bg-primary border border-primary rounded-lg focus:outline-0">
+                <div className="h-96 w-full bg-primary border border-primary rounded-lg focus:outline-0">
                   <ResponsiveContainer
                     width="100%"
                     height="100%"
@@ -287,20 +286,33 @@ const PortfolioSummaryComponent: React.FC<PortfolioSummaryProps> = ({
                           />
                         ))}
                       </Pie>
-                      <Legend
-                        verticalAlign="bottom"
-                        height={36}
-                        formatter={(value) => {
-                          const dataEntry = pieChartData.find(
-                            (item) => item.name === value
-                          );
-                          return `${value}: ${dataEntry?.count || 0} item${
-                            dataEntry?.count !== 1 ? "s" : ""
-                          }`;
-                        }}
-                      />
                     </PieChart>
                   </ResponsiveContainer>
+                  {/* Custom Legend Sorted by Percentage */}
+                  <div className="flex flex-wrap justify-center mt-4 gap-4">
+                    {pieChartData
+                      .slice()
+                      .sort((a, b) => b.percentage - a.percentage)
+                      .map((entry) => (
+                        <div
+                          key={entry.name}
+                          className="flex items-center gap-2"
+                        >
+                          <span
+                            className="inline-block w-4 h-4 rounded"
+                            style={{
+                              backgroundColor: getColorForAsset(entry.name),
+                            }}
+                          ></span>
+                          <span className="text-sm text-primary font-semibold">
+                            {entry.name}
+                          </span>
+                          <span className="text-xs text-muted">
+                            {entry.percentage.toFixed(2)}%
+                          </span>
+                        </div>
+                      ))}
+                  </div>
                 </div>
               ) : (
                 <div className="h-80 w-full flex items-center justify-center text-center">
@@ -316,8 +328,8 @@ const PortfolioSummaryComponent: React.FC<PortfolioSummaryProps> = ({
                 </div>
               )}
             </div>
-            {/*
-            <div>
+
+            <div className="mt-8">
               <h3 className="text-lg font-semibold text-primary mb-4">
                 Performance
               </h3>
@@ -328,7 +340,7 @@ const PortfolioSummaryComponent: React.FC<PortfolioSummaryProps> = ({
                       Top Performers
                     </h4>
                     <div className="space-y-2">
-                      {summary.top_performers.slice(0, 3).map((asset) => (
+                      {summary.top_performers.map((asset) => (
                         <div
                           key={asset.id}
                           className="flex items-center justify-between p-2 bg-tertiary rounded"
@@ -338,7 +350,7 @@ const PortfolioSummaryComponent: React.FC<PortfolioSummaryProps> = ({
                               {asset.name}
                             </span>
                             <span className="text-xs text-muted capitalize">
-                              {asset.asset_type}
+                              {asset.asset_type ? asset.asset_type : "Unknown"}
                             </span>
                           </div>
                           <span className="text-sm text-green">
@@ -351,12 +363,12 @@ const PortfolioSummaryComponent: React.FC<PortfolioSummaryProps> = ({
                 )}
 
                 {summary.worst_performers.length > 0 && (
-                  <div>
+                  <div className="mt-6">
                     <h4 className="text-sm font-medium text-secondary mb-2">
                       Underperformers
                     </h4>
                     <div className="space-y-2">
-                      {summary.worst_performers.slice(0, 3).map((asset) => (
+                      {summary.worst_performers.map((asset) => (
                         <div
                           key={asset.id}
                           className="flex items-center justify-between p-2 bg-tertiary rounded"
@@ -366,7 +378,7 @@ const PortfolioSummaryComponent: React.FC<PortfolioSummaryProps> = ({
                               {asset.name}
                             </span>
                             <span className="text-xs text-muted capitalize">
-                              {asset.asset_type}
+                              {asset.asset_type ? asset.asset_type : "Unknown"}
                             </span>
                           </div>
                           <span className="text-sm text-red">
@@ -379,7 +391,6 @@ const PortfolioSummaryComponent: React.FC<PortfolioSummaryProps> = ({
                 )}
               </div>
             </div>
-            */}
           </div>
         </div>
       </div>

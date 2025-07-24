@@ -47,6 +47,8 @@
     --hover-border: #72767d;
     --color-hover-bg: #40444b;
     --color-hover-border: #72767d;
+
+    --inset-shadow-md: inset 0 0 24px rgba(0, 0, 0, 0.5);
   }
 
   input[type="number"]::-webkit-inner-spin-button,

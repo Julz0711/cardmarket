@@ -447,20 +447,6 @@ export const SteamInventory: React.FC = () => {
     return colors[rarity] || "#b0b0b0";
   };
 
-  const getConditionColor = (condition: string) => {
-    const colors: Record<string, string> = {
-      FN: "text-gray-200",
-      MW: "text-gray-200",
-      FT: "text-gray-200",
-      WW: "text-gray-200",
-      BS: "text-gray-200",
-    };
-    return colors[condition] || "text-gray-500";
-  };
-
-  const inputStyle =
-    "w-full px-2 py-1 text-sm border-2 border-primary hover:border-white rounded-md bg-primary text-primary placeholder-muted";
-
   if (loading) {
     return (
       <div className="card">
@@ -939,15 +925,13 @@ export const SteamInventory: React.FC = () => {
                 return (
                   <div
                     key={itemId}
-                    className="bg-tertiary rounded-lg border-2 border-[var(--border-secondary)] overflow-hidden transition-colors"
+                    className="bg-tertiary shadow-lg inset-shadow-md rounded-lg border-2 border-[var(--border-secondary)] overflow-hidden transition-colors flex flex-col h-full"
+                    style={{
+                      background: `linear-gradient(to bottom, ${rarityColor}40 0%, transparent 60%), var(--bg-secondary)`,
+                    }}
                   >
                     {/* Item Image with Gradient Background */}
-                    <div
-                      className="bg-secondary rounded-md flex items-center justify-center pt-10 pb-0 relative"
-                      style={{
-                        background: `linear-gradient(to top, ${rarityColor}40 0%, transparent 60%), var(--bg-secondary)`,
-                      }}
-                    >
+                    <div className="flex items-center justify-center pt-10 pb-0 relative">
                       {item.image_url ? (
                         <img
                           src={item.image_url}
@@ -969,27 +953,8 @@ export const SteamInventory: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Item Details */}
-                    <div className="p-3">
-                      {/* Rarity & Condition */}
-                      <div className="flex justify-between items-center mb-4">
-                        <span
-                          className="text-sm font-medium"
-                          style={{ color: rarityColor }}
-                        >
-                          {item.rarity}
-                        </span>
-                        {item.condition && item.condition !== "N/A" && (
-                          <span
-                            className={`text-sm font-medium ${getConditionColor(
-                              item.condition
-                            )}`}
-                          >
-                            {item.condition}
-                          </span>
-                        )}
-                      </div>
-
+                    {/* Item Details and Actions - flex-grow to push actions to bottom */}
+                    <div className="flex flex-col flex-grow p-4">
                       {/* Float Value - Show for items that can have float */}
                       {item.float_value && item.float_value > 0 ? (
                         <div className="text-xs text-muted mb-2">
@@ -1008,7 +973,7 @@ export const SteamInventory: React.FC = () => {
                       <div className="space-y-2 mb-3">
                         <div className="flex justify-between items-end text-xs">
                           <span className="text-muted">Current:</span>
-                          <span className="text-white font-medium text-2xl">
+                          <span className="text-gold font-medium text-xl">
                             €{item.current_price?.toFixed(2) || "0.00"}
                           </span>
                         </div>
@@ -1087,8 +1052,8 @@ export const SteamInventory: React.FC = () => {
                               <span
                                 className={
                                   profitLoss >= 0
-                                    ? "text-green font-medium"
-                                    : "text-red font-medium"
+                                    ? "text-green-500 font-medium"
+                                    : "text-red-500 font-medium"
                                 }
                               >
                                 {profitLoss >= 0 ? "+" : ""}€
@@ -1097,13 +1062,30 @@ export const SteamInventory: React.FC = () => {
                             </div>
                           );
                         })()}
+
+                        <div className="flex justify-between items-end text-xs">
+                          <span className="text-muted">Rarity:</span>
+                          <span className="" style={{ color: rarityColor }}>
+                            {item.rarity}
+                          </span>
+                        </div>
+
+                        {item.condition && item.condition !== "N/A" && (
+                          <div className="flex justify-between items-end text-xs">
+                            <span className="text-muted">Condition:</span>
+                            <span>{item.condition}</span>
+                          </div>
+                        )}
                       </div>
 
+                      {/* Spacer to push actions to bottom */}
+                      <div className="flex-grow" />
+
                       {/* Action Buttons */}
-                      <div className="flex justify-between gap-1">
+                      <div className="flex justify-between gap-2 mt-1">
                         <button
                           onClick={() => handleEditPrice(item)}
-                          className="primary-btn btn-black text-xs px-2 py-1 flex-1"
+                          className="primary-btn btn-black flex-1"
                           disabled={editingItem === itemId}
                         >
                           <EditIcon fontSize="inherit" className="mr-1" />
@@ -1120,7 +1102,7 @@ export const SteamInventory: React.FC = () => {
                               "_blank"
                             )
                           }
-                          className="primary-btn btn-black text-xs px-2 py-1 flex-1"
+                          className="primary-btn btn-black flex-1"
                           title="Inspect in CS2"
                         >
                           <SearchIcon fontSize="inherit" className="mr-1" />

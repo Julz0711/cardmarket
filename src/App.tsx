@@ -16,6 +16,7 @@ import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import AccountBalanceIcon from "@mui/icons-material/AccountBalance";
 import CurrencyBitcoinIcon from "@mui/icons-material/CurrencyBitcoin";
 import SportsEsportsIcon from "@mui/icons-material/SportsEsports";
+import { ScraperStatusIndicator } from "./components/ScraperStatusIndicator";
 
 function App() {
   const [portfolioSummary, setPortfolioSummary] =
@@ -325,7 +326,12 @@ function AppContent({
               Track your investments across multiple asset classes
             </p>
           </div>
-          <AuthButton onUserManagementClick={() => setActiveSection("users")} />
+          <div className="flex flex-row gap-4 items-center">
+            <ScraperStatusIndicator />
+            <AuthButton
+              onUserManagementClick={() => setActiveSection("users")}
+            />
+          </div>
         </div>
 
         {/* Navigation */}

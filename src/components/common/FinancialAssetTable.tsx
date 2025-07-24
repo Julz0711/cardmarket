@@ -6,6 +6,7 @@ import { apiClient } from "../../api/client";
 import DeleteIcon from "@mui/icons-material/Delete";
 import AddIcon from "@mui/icons-material/Add";
 import CloseIcon from "@mui/icons-material/Close";
+import RefreshIcon from "@mui/icons-material/Refresh";
 
 interface FinancialAssetTableProps {
   assets: Asset[];
@@ -22,48 +23,7 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
   // Sorting filter state
   const [sortFilter, setSortFilter] = useState<string>("value");
 
-  // Currency conversion state
-  const [eurRate, setEurRate] = useState<number>(1.0); // Default to 1 for fallback
-  const [currencyError, setCurrencyError] = useState<string>("");
-
-  // Fetch EUR/USD rate on mount
-  useEffect(() => {
-    const fetchRate = async () => {
-      try {
-        // Try jsdelivr first
-        const res = await fetch(
-          "https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json"
-        );
-        if (!res.ok) throw new Error("jsdelivr failed");
-        const data = await res.json();
-        if (data?.usd?.eur) {
-          setEurRate(data.usd.eur);
-          setCurrencyError("");
-          return;
-        }
-        throw new Error("No EUR rate found");
-      } catch (err) {
-        // Fallback to Cloudflare
-        try {
-          const res2 = await fetch(
-            "https://latest.currency-api.pages.dev/v1/currencies/usd.json"
-          );
-          if (!res2.ok) throw new Error("Cloudflare failed");
-          const data2 = await res2.json();
-          if (data2?.usd?.eur) {
-            setEurRate(data2.usd.eur);
-            setCurrencyError("");
-            return;
-          }
-          throw new Error("No EUR rate found");
-        } catch (err2) {
-          setCurrencyError("Failed to fetch EUR/USD rate. Showing USD.");
-          setEurRate(1.0);
-        }
-      }
-    };
-    fetchRate();
-  }, []);
+  // ...existing code...
 
   // Add new asset modal state
   const [showAddModal, setShowAddModal] = useState(false);
@@ -102,17 +62,8 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
   const [updatePricesMessage, setUpdatePricesMessage] = useState<string>("");
   const [updatePricesError, setUpdatePricesError] = useState<string>("");
 
-  // Format as EUR, fallback to USD if rate not available
-  // If asset has currency and it's not EUR, convert using eurRate
-  const formatCurrency = (value: number, currency?: string) => {
-    if (currency && currency !== "EUR") {
-      // Assume USD if not EUR (yfinance usually returns USD or EUR)
-      if (eurRate !== 1.0) {
-        return `€${(value * eurRate).toFixed(2)}`;
-      }
-      return `$${value.toFixed(2)}`;
-    }
-    // EUR or unknown
+  // Format as EUR (all prices from backend are now in EUR)
+  const formatCurrency = (value: number) => {
     return `€${value.toFixed(2)}`;
   };
   const formatPercentage = (value: number) =>
@@ -133,21 +84,13 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
 
   const getTotalValue = () => {
     return assets.reduce((total, asset) => {
-      const price = asset.current_price;
-      if (asset.currency && asset.currency !== "EUR") {
-        return total + price * eurRate * asset.quantity;
-      }
-      return total + price * asset.quantity;
+      return total + asset.current_price * asset.quantity;
     }, 0);
   };
 
   const getTotalInvestment = () => {
     return assets.reduce((total, asset) => {
-      const price = asset.price_bought;
-      if (asset.currency && asset.currency !== "EUR") {
-        return total + price * eurRate * asset.quantity;
-      }
-      return total + price * asset.quantity;
+      return total + asset.price_bought * asset.quantity;
     }, 0);
   };
 
@@ -444,12 +387,7 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
   const getPortfolioPercentage = (asset: Asset) => {
     const totalPortfolioValue = getTotalValue();
     if (totalPortfolioValue === 0) return 0;
-
-    const assetValue =
-      asset.currency && asset.currency !== "EUR"
-        ? asset.current_price * eurRate * asset.quantity
-        : asset.current_price * asset.quantity;
-
+    const assetValue = asset.current_price * asset.quantity;
     return (assetValue / totalPortfolioValue) * 100;
   };
 
@@ -576,11 +514,7 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
   return (
     <div className="space-y-6">
       {/* Total Summary Section */}
-      {currencyError && (
-        <div className="mb-2 p-2 bg-yellow-900 border border-yellow-700 text-yellow-200 rounded text-sm">
-          {currencyError}
-        </div>
-      )}
+      {/* ...existing code... */}
       <div className="card">
         <div className="card-header">
           <div className="flex justify-between items-center">
@@ -589,18 +523,23 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
             </h3>
             <div className="flex space-x-3">
               <button
-                onClick={handleUpdatePrices}
-                disabled={isUpdatingPrices || assets.length === 0}
-                className="primary-btn btn-blue disabled:bg-gray-600 disabled:cursor-not-allowed"
-              >
-                {isUpdatingPrices ? "Updating..." : "Update Prices"}
-              </button>
-              <button
                 onClick={handleAddNew}
                 className="primary-btn btn-green disabled:bg-gray-600 disabled:cursor-not-allowed"
               >
                 <AddIcon fontSize="inherit" />
                 Add New {getAssetTypeLabel().slice(0, -1)}
+              </button>
+              <button
+                onClick={handleUpdatePrices}
+                disabled={isUpdatingPrices || assets.length === 0}
+                className="primary-btn btn-blue disabled:bg-gray-600 disabled:cursor-not-allowed"
+              >
+                {isUpdatingPrices ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                ) : (
+                  <RefreshIcon fontSize="inherit" />
+                )}
+                {isUpdatingPrices ? "Updating..." : "Update Prices"}
               </button>
               <button
                 onClick={handleDeleteAll}
@@ -729,18 +668,12 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
                 : `No ${assetType} found`}
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-4">
               {sortedAssets.map((asset) => {
                 const price = asset.current_price;
-                const totalValue =
-                  asset.currency && asset.currency !== "EUR"
-                    ? price * eurRate * asset.quantity
-                    : price * asset.quantity;
+                const totalValue = price * asset.quantity;
                 const invPrice = asset.price_bought;
-                const totalInvestment =
-                  asset.currency && asset.currency !== "EUR"
-                    ? invPrice * eurRate * asset.quantity
-                    : invPrice * asset.quantity;
+                const totalInvestment = invPrice * asset.quantity;
                 const profitLoss = totalValue - totalInvestment;
                 const profitLossPercentage =
                   totalInvestment > 0
@@ -758,9 +691,12 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
                     : "bg-gradient-to-r from-40% from-dark to-red/40";
 
                 return (
-                  <div key={asset.id} className="flex items-center space-x-3">
+                  <div
+                    key={asset.id}
+                    className="flex items-center justify-center space-x-4"
+                  >
                     <div
-                      className={`flex items-center justify-between ${gradientClass} border border-primary rounded-xl px-4 py-2 flex-1`}
+                      className={`flex items-center justify-between inset-shadow-md shadow-lg ${gradientClass} border border-primary rounded-xl px-4 py-3 flex-1`}
                     >
                       {/* Left Section: Logo & Asset Info */}
                       <div className="flex items-center space-x-4 flex-1">
@@ -783,11 +719,11 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
 
                         {/* Asset Details */}
                         <div className="flex-1">
-                          <div className="flex items-center space-x-4">
+                          <div className="flex items-center space-x-2">
                             {/* Ticker Symbol (smaller) and Full Name */}
                             <div className="flex flex-row items-center gap-2">
                               <span
-                                className="text-sm font-semibold text-white truncate"
+                                className="text-md font-semibold text-white max-w-48 truncate"
                                 title={asset.name}
                               >
                                 {asset.name}
@@ -798,13 +734,10 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
                             </div>
 
                             {/* Current Price */}
-                            <div className="text-md font-semibold text-gold">
-                              {formatCurrency(
-                                asset.current_price,
-                                asset.currency
-                              )}
+                            <div className="text-sm font-semibold text-gold">
+                              {formatCurrency(asset.current_price)}
                               {asset.currency && (
-                                <span className="text-xs text-muted ml-1">
+                                <span className="text-sm text-muted ml-1">
                                   ({asset.currency})
                                 </span>
                               )}
@@ -812,7 +745,7 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
 
                             {/* 24h Change */}
                             <div
-                              className={`text-[10px] font-medium px-2 py-1 rounded-full ${
+                              className={`text-[8px] font-medium px-1.5 py-0.5 rounded-full ${
                                 change24h >= 0
                                   ? "bg-green/30 text-green-400"
                                   : "bg-red/30 text-red-400"
@@ -835,12 +768,12 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
                                 }}
                               />
                             </div>
-                            <div className="text-xs text-muted min-w-[3rem] text-left">
+                            <div className="text-xs text-muted">
                               {portfolioPercentage.toFixed(1)}%
                             </div>
-                            <div className="text-xs text-gray-400 ml-2">
+                            <div className="text-xs text-muted">
                               <span className="text-muted">
-                                ({asset.quantity}{" "}
+                                ({Number(asset.quantity).toFixed(2)}{" "}
                                 {assetType === "crypto" ? "units" : "shares"})
                               </span>
                             </div>
@@ -851,9 +784,7 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
                       {/* Right Section: Total Value */}
                       <div className="text-right">
                         <div className="text-xl font-bold text-white">
-                          {assetType === "crypto"
-                            ? formatCurrency(totalValue, "USD")
-                            : formatCurrency(totalValue, "EUR")}
+                          {formatCurrency(totalValue)}
                         </div>
                         <div
                           className={`text-sm ${getProfitLossColor(
@@ -861,12 +792,7 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
                           )}`}
                         >
                           {getProfitLossSymbol(profitLoss)}
-                          {assetType === "crypto"
-                            ? formatCurrency(
-                                Math.abs(profitLoss),
-                                asset.currency
-                              )
-                            : formatCurrency(Math.abs(profitLoss), "EUR")}
+                          {formatCurrency(Math.abs(profitLoss))}
                           <span className="text-xs ml-1">
                             ({formatPercentage(profitLossPercentage)})
                           </span>

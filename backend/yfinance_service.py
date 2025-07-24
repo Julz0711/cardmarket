@@ -87,13 +87,62 @@ class YFinanceService:
                 previous_price = float(hist['Close'].iloc[-2])
                 if previous_price > 0:
                     change_24h = ((current_price - previous_price) / previous_price) * 100
-            
-            # Extract relevant information based on asset type
+
+            import requests
+            def convert_to_eur(price: float, currency: str) -> float:
+                if currency == "EUR":
+                    logger.info(f"No conversion needed for EUR. Price: {price}")
+                    return price
+                if currency == "USD":
+                    logger.info(f"Converting price from USD to EUR. Price: {price}")
+                    try:
+                        resp = requests.get("https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json", timeout=5)
+                        if resp.ok:
+                            data = resp.json()
+                            eur_rate = data.get("usd", {}).get("eur", None)
+                            if eur_rate:
+                                logger.info(f"Fetched USD/EUR rate: {eur_rate}")
+                                converted = price * float(eur_rate)
+                                logger.info(f"Converted price: {converted}")
+                                return converted
+                            else:
+                                logger.warning("No EUR rate found in response.")
+                        else:
+                            logger.warning(f"Currency API request failed. Status: {resp.status_code}")
+                    except Exception as e:
+                        logger.error(f"Currency conversion failed: {e}")
+                    # Fallback to secondary API
+                    try:
+                        resp2 = requests.get("https://latest.currency-api.pages.dev/v1/currencies/usd.json", timeout=5)
+                        if resp2.ok:
+                            data2 = resp2.json()
+                            eur_rate2 = data2.get("usd", {}).get("eur", None)
+                            if eur_rate2:
+                                logger.info(f"Fetched fallback USD/EUR rate: {eur_rate2}")
+                                converted2 = price * float(eur_rate2)
+                                logger.info(f"Converted price (fallback): {converted2}")
+                                return converted2
+                            else:
+                                logger.warning("No EUR rate found in fallback response.")
+                        else:
+                            logger.warning(f"Fallback currency API request failed. Status: {resp2.status_code}")
+                    except Exception as e2:
+                        logger.error(f"Fallback currency conversion failed: {e2}")
+                    logger.warning(f"Falling back to original USD price (no conversion possible). Currency: {currency}, Price: {price}")
+                    return price  # fallback: no conversion
+                # If not EUR or USD, just return price
+                logger.info(f"Currency {currency} not supported for conversion. Returning original price: {price}")
+                return price
+
+            currency = info.get('currency', 'USD')
+            eur_price = convert_to_eur(current_price, currency)
             asset_data = {
                 'symbol': symbol.upper(),
                 'name': info.get('longName', info.get('shortName', symbol)),
-                'current_price': current_price,
-                'currency': info.get('currency', 'USD'),
+                'current_price': eur_price,
+                'currency': 'EUR',
+                'original_price': current_price,
+                'original_currency': currency,
                 'change_24h': change_24h,
                 'last_updated': datetime.utcnow().isoformat(),
                 'asset_type': asset_type
@@ -115,7 +164,6 @@ class YFinanceService:
                     'category': info.get('category', ''),
                     'dividend_yield': info.get('dividendYield', 0) * 100 if info.get('dividendYield') else 0
                 })
-            
             elif asset_type == "crypto":
                 asset_data.update({
                     'market_cap': info.get('marketCap', 0),
