@@ -3,13 +3,14 @@ Scraper Manager
 Centralized management for all portfolio scrapers
 """
 
-from typing import Dict, List, Any, Optional, Type
+from typing import Dict, List, Any, Optional
 import logging
 from datetime import datetime
 
 from .base_scraper import BaseScraper, ScraperError
 from .trading_cards_scraper import TradingCardsScraper
 from .steam_inventory_scraper import SteamInventoryScraper
+from .skinsearch_scraper import SkinSearchScraper
 
 
 class ScraperManager:
@@ -34,6 +35,7 @@ class ScraperManager:
         self.scrapers: Dict[str, BaseScraper] = {
             'cards': TradingCardsScraper(),
             'steam': SteamInventoryScraper(),
+            'skinsearch': SkinSearchScraper(),
         }
         
         self.logger.info("ScraperManager initialized with scrapers: %s", list(self.scrapers.keys()))
@@ -51,7 +53,7 @@ class ScraperManager:
         Scrape assets using specified scraper
         
         Args:
-            scraper_type: Type of scraper to use ('cards', 'stocks', 'etf', 'crypto', 'steam')
+            scraper_type: Type of scraper to use ('cards', 'stocks', 'etf', 'crypto', 'steam', 'skinsearch')
             **kwargs: Parameters to pass to the scraper
             
         Returns:
@@ -75,19 +77,29 @@ class ScraperManager:
             from .steam_inventory_scraper import SteamInventoryScraper
             headless = kwargs.pop('headless', True)
             scraper = SteamInventoryScraper(headless=headless)
+        elif scraper_type == 'skinsearch':
+            # Always use the singleton instance for skinsearch so status is tracked globally
+            scraper = self.scrapers['skinsearch']
         else:
             scraper = self.scrapers[scraper_type]
         
         try:
             self.logger.info(f"Starting {scraper_type} scraping with params: {kwargs}")
-            assets = scraper.scrape(**kwargs)
-            self.logger.info(f"Completed {scraper_type} scraping. Found {len(assets)} assets")
+            # For skinsearch, support both scrape_steam_item and batch_update_steam_prices
+            if scraper_type == 'skinsearch':
+                if 'steam_items' in kwargs:
+                    assets = scraper.batch_update_steam_prices(kwargs['steam_items'])
+                elif 'item' in kwargs:
+                    assets = scraper.scrape_steam_item(kwargs['item'])
+                else:
+                    raise ScraperError("SkinSearchScraper requires 'steam_items' or 'item' argument")
+            else:
+                assets = scraper.scrape(**kwargs)
+            self.logger.info(f"Completed {scraper_type} scraping. Found {len(assets) if assets is not None else 0} assets")
             return assets
-            
         except Exception as e:
             self.logger.error(f"Error in {scraper_type} scraping: {e}")
             raise ScraperError(f"Failed to scrape {scraper_type}: {e}")
-        
         finally:
             # Clean up dynamically created scrapers
             if ((scraper_type == 'cards' or scraper_type == 'steam') and 
@@ -106,12 +118,15 @@ class ScraperManager:
         status = {}
         for scraper_type, scraper in self.scrapers.items():
             running = getattr(scraper, 'is_running', False)
+            last_used = getattr(scraper, 'last_used', None)
+            # Debug log for status reporting
+            logging.getLogger(__name__).info(f"Scraper status: {scraper_type} running={running} last_used={last_used}")
             status[scraper_type] = {
-                'name': scraper.name,
+                'name': getattr(scraper, 'name', scraper_type),
                 'available': True,
                 'requires_api_key': self._requires_api_key(scraper_type),
                 'has_api_key': self._has_required_api_key(scraper_type),
-                'last_used': getattr(scraper, 'last_used', None),
+                'last_used': last_used,
                 'running': running
             }
         return status

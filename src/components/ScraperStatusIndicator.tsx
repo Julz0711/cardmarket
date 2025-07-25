@@ -20,7 +20,11 @@ export const ScraperStatusIndicator: React.FC = () => {
         });
         const data = await res.json();
         if (isMounted && data.scrapers) {
-          setScrapers(data.scrapers);
+          // Convert object to array for consistent frontend usage
+          const scrapersArray = Array.isArray(data.scrapers)
+            ? data.scrapers
+            : Object.values(data.scrapers);
+          setScrapers(scrapersArray);
         }
       } catch {
         // handle error if needed

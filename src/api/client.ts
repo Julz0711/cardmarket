@@ -269,39 +269,6 @@ class ApiClient {
     });
   }
 
-  // Scraping endpoints - Stocks (placeholder)
-  async scrapeStocks(data: { symbols: string[]; market?: string }): Promise<{
-    message: string;
-    scraped_stocks: Stock[];
-  }> {
-    return this.request("/scrape/stocks", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
-  }
-
-  // Scraping endpoints - ETFs (placeholder)
-  async scrapeETFs(data: { symbols: string[] }): Promise<{
-    message: string;
-    scraped_etfs: ETF[];
-  }> {
-    return this.request("/scrape/etfs", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
-  }
-
-  // Scraping endpoints - Crypto (placeholder)
-  async scrapeCrypto(data: { symbols: string[] }): Promise<{
-    message: string;
-    scraped_crypto: Crypto[];
-  }> {
-    return this.request("/scrape/crypto", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
-  }
-
   // Steam Inventory Management
   async updateSteamItem(
     itemId: string,

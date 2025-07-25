@@ -8,6 +8,29 @@ import AddIcon from "@mui/icons-material/Add";
 import CloseIcon from "@mui/icons-material/Close";
 import RefreshIcon from "@mui/icons-material/Refresh";
 
+// --- Types for buy/sell transactions ---
+type TransactionType = "buy" | "sell";
+type Purchase = {
+  quantity: number;
+  price: number;
+  date?: string;
+  type: TransactionType;
+};
+interface AddFormData {
+  ticker: string;
+  quantity: number;
+  purchases: Purchase[];
+  tempQuantity: string;
+  tempPrice: string;
+  type: TransactionType;
+}
+interface EditFormData {
+  purchases: Purchase[];
+  tempQuantity: string;
+  tempPrice: string;
+  type: TransactionType;
+}
+
 interface FinancialAssetTableProps {
   assets: Asset[];
   assetType: "stocks" | "etfs" | "crypto";
@@ -30,24 +53,25 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
   const [isAdding, setIsAdding] = useState(false);
   const [addMessage, setAddMessage] = useState<string>("");
   const [addError, setAddError] = useState<string>("");
-  const [addFormData, setAddFormData] = useState({
+  // Types moved to top-level below imports
+  const [addFormData, setAddFormData] = useState<AddFormData>({
     ticker: "",
     quantity: 1,
-    // Purchase history for stocks/ETFs
-    purchases: [] as { quantity: number; price: number; date?: string }[],
+    purchases: [],
     tempQuantity: "",
     tempPrice: "",
+    type: "buy",
   });
 
   // Edit modal states
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
-  const [editFormData, setEditFormData] = useState({
-    quantity: 0,
-    price_bought: 0,
-    purchases: [] as { quantity: number; price: number; date?: string }[],
+  // Types moved to top-level below imports
+  const [editFormData, setEditFormData] = useState<EditFormData>({
+    purchases: [],
     tempQuantity: "",
     tempPrice: "",
+    type: "buy",
   });
   const [isUpdating, setIsUpdating] = useState(false);
   const [updateError, setUpdateError] = useState<string>("");
@@ -114,6 +138,7 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
       purchases: [],
       tempQuantity: "",
       tempPrice: "",
+      type: "buy",
     });
   };
 
@@ -127,30 +152,26 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
 
   // Purchase step functions for stocks/ETFs
   const handleAddPurchase = () => {
-    // Parse tempQuantity and tempPrice as float, replacing comma with dot
     const quantity = parseFloat(
       (addFormData.tempQuantity + "").replace(",", ".")
     );
     const price = parseFloat((addFormData.tempPrice + "").replace(",", "."));
-
     if (isNaN(quantity) || quantity <= 0 || isNaN(price) || price <= 0) {
       setAddError("Please enter valid quantity and price");
       return;
     }
-
-    const newPurchase = {
+    const newPurchase: Purchase = {
       quantity,
       price,
-      date: new Date().toISOString().split("T")[0], // Today's date
+      date: new Date().toISOString().split("T")[0],
+      type: addFormData.type,
     };
-
     setAddFormData((prev) => ({
       ...prev,
       purchases: [...prev.purchases, newPurchase],
       tempQuantity: "",
       tempPrice: "",
     }));
-
     setAddError("");
   };
 
@@ -161,22 +182,19 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
     }));
   };
 
-  const getTotalQuantity = () => {
-    return addFormData.purchases.reduce(
-      (total, purchase) => total + purchase.quantity,
-      0
-    );
+  const getTotalQuantity = (type: TransactionType = addFormData.type) => {
+    return addFormData.purchases
+      .filter((p) => p.type === type)
+      .reduce((total, purchase) => total + purchase.quantity, 0);
   };
-
-  const getAveragePrice = () => {
-    if (addFormData.purchases.length === 0) return 0;
-
-    const totalValue = addFormData.purchases.reduce(
+  const getAveragePrice = (type: TransactionType = addFormData.type) => {
+    const filtered = addFormData.purchases.filter((p) => p.type === type);
+    if (filtered.length === 0) return 0;
+    const totalValue = filtered.reduce(
       (total, purchase) => total + purchase.quantity * purchase.price,
       0
     );
-    const totalQuantity = getTotalQuantity();
-
+    const totalQuantity = getTotalQuantity(type);
     return totalQuantity > 0 ? totalValue / totalQuantity : 0;
   };
 
@@ -222,6 +240,7 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
         purchases: [],
         tempQuantity: "",
         tempPrice: "",
+        type: "buy",
       }); // Refresh the data
       if (onDataUpdate) {
         onDataUpdate();
@@ -237,21 +256,18 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
 
   const handleEditAsset = (asset: Asset) => {
     setEditingAsset(asset);
-
-    // Initialize with current asset data
-    // Since backend doesn't store purchase history yet, create a single entry
-    const singlePurchase = {
+    // Default to buy tab, and create a single buy entry for now
+    const singlePurchase: Purchase = {
       quantity: asset.quantity,
       price: asset.price_bought,
-      date: new Date().toISOString().split("T")[0], // Today's date as fallback
+      date: new Date().toISOString().split("T")[0],
+      type: "buy",
     };
-
     setEditFormData({
-      quantity: asset.quantity,
-      price_bought: asset.price_bought,
       purchases: [singlePurchase],
       tempQuantity: "",
       tempPrice: "",
+      type: "buy",
     });
     setShowEditModal(true);
     setUpdateError("");
@@ -271,25 +287,22 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
       (editFormData.tempQuantity + "").replace(",", ".")
     );
     const price = parseFloat((editFormData.tempPrice + "").replace(",", "."));
-
     if (isNaN(quantity) || quantity <= 0 || isNaN(price) || price <= 0) {
       setUpdateError("Please enter valid quantity and price");
       return;
     }
-
-    const newPurchase = {
+    const newPurchase: Purchase = {
       quantity,
       price,
       date: new Date().toISOString().split("T")[0],
+      type: editFormData.type,
     };
-
     setEditFormData((prev) => ({
       ...prev,
       purchases: [...prev.purchases, newPurchase],
       tempQuantity: "",
       tempPrice: "",
     }));
-
     setUpdateError("");
   };
 
@@ -300,22 +313,19 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
     }));
   };
 
-  const getEditTotalQuantity = () => {
-    return editFormData.purchases.reduce(
-      (total, purchase) => total + purchase.quantity,
-      0
-    );
+  const getEditTotalQuantity = (type: TransactionType = editFormData.type) => {
+    return editFormData.purchases
+      .filter((p) => p.type === type)
+      .reduce((total, purchase) => total + purchase.quantity, 0);
   };
-
-  const getEditAveragePrice = () => {
-    if (editFormData.purchases.length === 0) return 0;
-
-    const totalValue = editFormData.purchases.reduce(
+  const getEditAveragePrice = (type: TransactionType = editFormData.type) => {
+    const filtered = editFormData.purchases.filter((p) => p.type === type);
+    if (filtered.length === 0) return 0;
+    const totalValue = filtered.reduce(
       (total, purchase) => total + purchase.quantity * purchase.price,
       0
     );
-    const totalQuantity = getEditTotalQuantity();
-
+    const totalQuantity = getEditTotalQuantity(type);
     return totalQuantity > 0 ? totalValue / totalQuantity : 0;
   };
 
@@ -476,7 +486,6 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
         asset.symbol.toLowerCase().includes(filterText.toLowerCase()))
   );
 
-  // Sorting logic
   const sortedAssets = [...filteredAssets].sort((a, b) => {
     const totalValueA = a.current_price * a.quantity;
     const totalValueB = b.current_price * b.quantity;
@@ -817,7 +826,7 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
 
       {/* Edit Asset Modal */}
       {showEditModal && editingAsset && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-10 flex items-center justify-center z-50">
           <div className="bg-primary rounded-lg p-6 w-full max-w-md mx-4 border border-primary">
             <h3 className="text-lg font-semibold text-white mb-4">
               Edit{" "}
@@ -832,110 +841,131 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
               }}
             >
               <div className="space-y-4">
-                <div className="space-y-2">
-                  <div className="text-sm font-medium text-gray-300">
-                    Purchase History
+                {/* Add Transaction Section */}
+                <div className="bg-primary p-4 rounded-md border border-primary">
+                  {/* Buy/Sell Tabs */}
+                  <div className="flex space-x-2 bg-tertiary p-1 rounded-lg mb-2">
+                    {(["buy", "sell"] as TransactionType[]).map((type) => (
+                      <button
+                        key={type}
+                        type="button"
+                        className={`px-4 py-1 w-full rounded-md font-semibold text-sm focus:outline-none transition-colors cursor-pointer hover:bg-primary/50 ${
+                          editFormData.type === type
+                            ? "bg-primary text-white"
+                            : "text-muted hover:text-white"
+                        }`}
+                        onClick={() => setEditFormData((f) => ({ ...f, type }))}
+                      >
+                        {type === "buy" ? "Buy" : "Sell"}
+                      </button>
+                    ))}
                   </div>
-
-                  {/* Add new purchase section */}
-                  <div className="bg-primary p-4 rounded-md border border-primary">
-                    <div className="grid grid-cols-2 gap-3 mb-3">
-                      <div>
-                        <label className="block text-xs font-medium text-gray-400 mb-2">
-                          {assetType === "crypto" ? "Quantity" : "Shares"}
-                        </label>
-                        <input
-                          type="text"
-                          name="tempQuantity"
-                          value={editFormData.tempQuantity || ""}
-                          onChange={handleEditInputChange}
-                          placeholder={assetType === "crypto" ? "0.001" : "10"}
-                          className="w-full input"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-400 mb-2">
-                          {assetType === "crypto"
-                            ? "Price per Unit (€)"
-                            : "Price per Share (€)"}
-                        </label>
-                        <input
-                          type="text"
-                          name="tempPrice"
-                          value={editFormData.tempPrice || ""}
-                          onChange={handleEditInputChange}
-                          placeholder={
-                            assetType === "crypto" ? "50000.00" : "150.00"
-                          }
-                          className="w-full input"
-                        />
-                      </div>
+                  <div className="grid grid-cols-2 gap-3 mb-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-400 mb-2">
+                        {assetType === "crypto" ? "Quantity" : "Shares"}
+                      </label>
+                      <input
+                        type="text"
+                        name="tempQuantity"
+                        value={editFormData.tempQuantity || ""}
+                        onChange={handleEditInputChange}
+                        placeholder={assetType === "crypto" ? "0.001" : "10"}
+                        className="w-full input"
+                      />
                     </div>
-                    <button
-                      type="button"
-                      onClick={handleEditAddPurchase}
-                      className="primary-btn"
-                    >
-                      Add Purchase
-                    </button>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-400 mb-2">
+                        {assetType === "crypto"
+                          ? "Price per Unit (€)"
+                          : "Price per Share (€)"}
+                      </label>
+                      <input
+                        type="text"
+                        name="tempPrice"
+                        value={editFormData.tempPrice || ""}
+                        onChange={handleEditInputChange}
+                        placeholder={
+                          assetType === "crypto" ? "50000.00" : "150.00"
+                        }
+                        className="w-full input"
+                      />
+                    </div>
                   </div>
+                  <button
+                    type="button"
+                    onClick={handleEditAddPurchase}
+                    className="primary-btn btn-blue"
+                  >
+                    Add Transaction
+                  </button>
 
-                  {/* Purchase history list */}
-                  {editFormData.purchases.length > 0 && (
-                    <div className="space-y-2">
-                      <div className="text-xs font-medium text-gray-400">
-                        Purchase Entries ({editFormData.purchases.length})
+                  {editFormData.purchases.filter(
+                    (p) => p.type === editFormData.type
+                  ).length > 0 && (
+                    <div className="space-y-2 mt-8">
+                      <div className="text-xs font-semibold text-muted">
+                        {editFormData.type === "buy" ? "Buy" : "Sell"}{" "}
+                        Transactions (
+                        {
+                          editFormData.purchases.filter(
+                            (p) => p.type === editFormData.type
+                          ).length
+                        }
+                        )
                       </div>
                       <div className="max-h-32 overflow-y-auto space-y-1">
-                        {editFormData.purchases.map((purchase, index) => (
-                          <div
-                            key={index}
-                            className="bg-tertiary p-2 rounded-md text-xs flex justify-between items-center"
-                          >
-                            <div className="text-gray-300">
-                              <span className="font-bold">
-                                {purchase.quantity}
-                              </span>{" "}
-                              {assetType === "crypto" ? "units" : "shares"} @{" "}
-                              <span className="font-bold">
-                                {purchase.price.toFixed(2)}€
-                              </span>
-                              {purchase.date && (
-                                <span className="text-gray-400 ml-2">
-                                  ({purchase.date})
-                                </span>
-                              )}
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => handleEditRemovePurchase(index)}
-                              className="bg-red-600 hover:bg-red-700 text-white rounded-md p-1 flex items-center justify-center transition-colors"
+                        {editFormData.purchases
+                          .filter((p) => p.type === editFormData.type)
+                          .map((purchase, index) => (
+                            <div
+                              key={index}
+                              className="bg-tertiary p-2 rounded-md text-xs flex justify-between items-center"
                             >
-                              <CloseIcon fontSize="inherit" />
-                            </button>
-                          </div>
-                        ))}
+                              <div className="text-gray-300">
+                                <span className="font-bold">
+                                  {purchase.quantity}
+                                </span>{" "}
+                                {assetType === "crypto" ? "units" : "shares"} @{" "}
+                                <span className="font-bold">
+                                  {purchase.price.toFixed(2)}€
+                                </span>
+                                {purchase.date && (
+                                  <span className="text-gray-400 ml-2">
+                                    ({purchase.date})
+                                  </span>
+                                )}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleEditRemovePurchase(index)}
+                                className="bg-red-600 hover:bg-red-700 text-white rounded-md p-1 flex items-center justify-center transition-colors"
+                              >
+                                <CloseIcon fontSize="inherit" />
+                              </button>
+                            </div>
+                          ))}
                       </div>
-
-                      {/* Summary */}
+                      {/* Summary for selected tab */}
                       <div className="bg-tertiary p-2 rounded-md text-xs text-gray-300">
                         <div>
                           Total Quantity:{" "}
                           <span className="font-bold">
-                            {getEditTotalQuantity()}
+                            {getEditTotalQuantity(editFormData.type)}
                           </span>
                         </div>
                         <div>
                           Average Price:{" "}
                           <span className="font-bold">
-                            {getEditAveragePrice().toFixed(2)}€
+                            {getEditAveragePrice(editFormData.type).toFixed(2)}€
                           </span>
                         </div>
                         <div>
                           Total Investment:{" "}
                           <span className="font-bold">
                             {(
-                              getEditTotalQuantity() * getEditAveragePrice()
+                              getEditTotalQuantity(editFormData.type) *
+                              getEditAveragePrice(editFormData.type)
                             ).toFixed(2)}
                             €
                           </span>
@@ -944,6 +974,7 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
                     </div>
                   )}
                 </div>
+                {/* Transaction History List for selected tab */}
               </div>
 
               {updateError && (

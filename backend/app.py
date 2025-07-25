@@ -1765,7 +1765,7 @@ def update_steam_prices():
         updated_items = []
         failed_items = []
         skipped_items = []
-        from skinsearch_scraper import SkinSearchScraper
+        from scrapers.skinsearch_scraper import SkinSearchScraper
         scraper = SkinSearchScraper()
         for item in items:
             try:

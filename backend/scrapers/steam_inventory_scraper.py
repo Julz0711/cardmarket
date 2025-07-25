@@ -17,7 +17,8 @@ Usage:
 from typing import List, Dict, Any, Optional
 import requests
 import json
-from skinsearch_scraper import SkinSearchScraper
+from datetime import datetime
+from scrapers.skinsearch_scraper import SkinSearchScraper
 import time
 import re
 from selenium import webdriver
@@ -57,7 +58,8 @@ class SteamInventoryScraper(BaseScraper):
         self.driver = None
         self.headless = headless
         self.steam_api_base = "https://steamcommunity.com/inventory"
-        
+        self.is_running = False
+        self.last_used = None
         self._setup_driver()
         
     def _setup_driver(self):
@@ -119,42 +121,28 @@ class SteamInventoryScraper(BaseScraper):
     def scrape(self, **kwargs) -> List[Dict[str, Any]]:
         """
         Scrape Steam CS2 inventory data
-        
-        Args:
-            steam_id (str): Steam ID or profile URL (e.g., '76561198205836117' or full URL)
-            app_id (str): Steam App ID (default: 730 for CS2)
-            include_floats (bool): Whether to fetch float values (requires web scraping)
-            user_id (str): User ID to associate items with (required for proper user binding)
-            
-        Returns:
-            List of Steam item dictionaries with CS2-specific data
         """
-        self.validate_input(**kwargs)
-        self.log_scraping_start(**kwargs)
-        
-        steam_id = kwargs['steam_id']
-        app_id = kwargs.get('app_id', '730')  # Default to CS2
-        include_floats = kwargs.get('include_floats', True)
-        include_prices = kwargs.get('include_prices', False)  # Include prices is optional
-        user_id = kwargs.get('user_id')  # Extract user_id parameter
-        
-        items = []
-        skinsearch = SkinSearchScraper()
-        
+        self.is_running = True
+        self.last_used = datetime.now().isoformat()
         try:
+            self.validate_input(**kwargs)
+            self.log_scraping_start(**kwargs)
+            steam_id = kwargs['steam_id']
+            app_id = kwargs.get('app_id', '730')  # Default to CS2
+            include_floats = kwargs.get('include_floats', True)
+            include_prices = kwargs.get('include_prices', False)  # Include prices is optional
+            user_id = kwargs.get('user_id')  # Extract user_id parameter
+            items = []
+            skinsearch = SkinSearchScraper()
             # Extract Steam ID from URL if provided
             steam_id = self._extract_steam_id_from_url(steam_id)
-            
             # Get inventory data
             inventory_data = self._get_inventory(steam_id, app_id)
-            
             self.logger.info(f"Found {len(inventory_data)} items in inventory")
-            
             # Process each CS2 item
             for i, item_data in enumerate(inventory_data):
                 try:
                     item_name = item_data.get('market_hash_name', 'Unknown')
-                    
                     # Only process CS2 items
                     if self._is_cs2_item(item_data):
                         item = self._process_cs2_item(item_data, steam_id, include_floats, user_id)
@@ -181,32 +169,27 @@ class SteamInventoryScraper(BaseScraper):
                                 item['current_price'] = 0
                                 item['price_details'] = []
                                 item['skinsearch_url'] = None
-                                
                             items.append(item)
                             self.logger.info(f"Processed item {i+1}/{len(inventory_data)}: {item.get('name', 'Unknown')} (Category: {item.get('item_category', 'unknown')})")
                         else:
                             self.logger.warning(f"Failed to process CS2 item: {item_name}")
                     else:
                         self.logger.debug(f"Skipped non-CS2 item: {item_name}")
-                    
                     # Rate limiting to avoid being blocked
                     if include_floats and self.driver:
                         time.sleep(1)  # Slower when fetching float values
                     else:
                         time.sleep(0.1)
-                        
                 except Exception as e:
                     self.logger.error(f"Error processing item {item_data.get('market_hash_name', 'Unknown')}: {e}")
                     continue
-            
             self.log_scraping_complete(len(items))
             return items
-            
         except Exception as e:
             self.log_error(e)
             raise ScraperError(f"Steam inventory scraping failed: {e}")
-        
         finally:
+            self.is_running = False
             self._cleanup()
     
     def _extract_steam_id_from_url(self, steam_input: str) -> str:
