@@ -36,6 +36,20 @@ export type {
 };
 
 class ApiClient {
+  // Rescrape Steam Inventory
+  async rescrapeSteamInventory(data: { steam_id: string }): Promise<{
+    status: string;
+    message?: string;
+    items?: SteamItem[];
+    added?: number;
+    removed?: number;
+    skipped?: number;
+  }> {
+    return this.request("/steam/rescrape", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
   private async request<T>(
     endpoint: string,
     options: RequestInit = {}

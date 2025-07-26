@@ -21,6 +21,30 @@ export const SteamInventory: React.FC = () => {
   const [deletingAll, setDeletingAll] = useState(false);
   const [updatingPrices, setUpdatingPrices] = useState(false);
   const [updatingFloats, setUpdatingFloats] = useState(false);
+  const [rescraping, setRescraping] = useState(false);
+  const [rescrapeMessage, setRescrapeMessage] = useState("");
+
+  // Rescrape inventory handler
+  const handleRescrapeInventory = async () => {
+    setRescraping(true);
+    setRescrapeMessage("");
+    setError("");
+    try {
+      // Call backend endpoint to rescrape inventory and update DB
+      const response = await apiClient.rescrapeSteamInventory({
+        steam_id: profileId,
+      });
+      // Reload items after rescrape
+      await loadSteamItems();
+      setRescrapeMessage(response.message || "Rescrape completed.");
+    } catch (err) {
+      setError("Failed to rescrape Steam inventory");
+      setRescrapeMessage("");
+      console.error(err);
+    } finally {
+      setRescraping(false);
+    }
+  };
 
   // Edit price states
   const [editingItem, setEditingItem] = useState<string | null>(null);
@@ -358,9 +382,14 @@ export const SteamInventory: React.FC = () => {
             Exceptional: 4,
             Superior: 5,
             Master: 6,
-            Common: 1,
+            Common: 0,
             Uncommon: 2,
             Immortal: 7,
+            "Master Agent": 6,
+            "Superior Agent": 5,
+            "Exceptional Agent": 4,
+            "Distinguished Agent": 3,
+            Rare: 3,
           };
           const aRarity =
             rarityOrder[a.rarity as keyof typeof rarityOrder] || 0;
@@ -406,37 +435,15 @@ export const SteamInventory: React.FC = () => {
       Uncommon: "#5e98d9",
       Common: "#b0b0b0",
       Stock: "#b0b0b0",
+      Rare: "#4b69ff",
       // Agent rarities - NEW proper names (after rescraping)
-      "Master Agent": "#eb4b4b", // Master Agent (red)
-      "Superior Agent": "#d32ce6", // Superior Agent (pink)
-      "Exceptional Agent": "#8847ff", // Exceptional Agent (purple)
-      "Distinguished Agent": "#4b69ff", // Distinguished Agent (blue)
-      // Agent rarities - OLD format (before rescraping) - TEMPORARY FIXES
-      Master: "#eb4b4b", // Will show as Master Agent after rescraping
-      Superior: "#d32ce6", // Will show as Superior Agent after rescraping
-      Exceptional: "#8847ff", // Will show as Exceptional Agent after rescraping
-      Distinguished: "#4b69ff", // Will show as Distinguished Agent after rescraping
+      "Master Agent": "#eb4b4b",
+      "Superior Agent": "#d32ce6",
+      "Exceptional Agent": "#8847ff",
+      "Distinguished Agent": "#4b69ff",
       // Legacy agent rarities mapped incorrectly - FIXES for current data
-      Legendary: "#eb4b4b", // Actually Master Agent (red) - WRONG in current data
-      Mythical: "#8847ff", // Actually Exceptional Agent (purple) - WRONG in current data
-      "Industrial Grade": "#4b69ff", // Actually Distinguished Agent (blue) - WRONG in current data
-      Immortal: "#e4ae39",
-      // CS2 Agent rarity variations
-      "★": "#ffd700", // Special symbol for some agents
-      "★ Master Agent": "#eb4b4b",
-      "★ Superior Agent": "#d32ce6",
-      "★ Exceptional Agent": "#8847ff",
-      "★ Distinguished Agent": "#4b69ff",
-      // Quality levels
-      Normal: "#b0b0b0",
-      Genuine: "#4b69ff",
-      Vintage: "#476291",
-      Unusual: "#8650ac",
-      Unique: "#ffd700",
-      Strange: "#cf6a32",
-      Haunted: "#38f3ab",
-      "Collector's": "#aa0000",
-      Decorated: "#ffd700",
+      Legendary: "#eb4b4b",
+      Mythical: "#8847ff",
     };
 
     // Debug log to see what rarity values we're getting
@@ -516,6 +523,12 @@ export const SteamInventory: React.FC = () => {
               </h2>
             </div>
 
+            {rescrapeMessage && (
+              <span className="ml-4 text-xs text-blue-400">
+                {rescrapeMessage}
+              </span>
+            )}
+
             {/* Steam Profile Actions */}
             <div className="flex items-center gap-3">
               {profileId ? (
@@ -534,6 +547,23 @@ export const SteamInventory: React.FC = () => {
                   {addingProfile ? "Importing..." : "Add Profile"}
                 </button>
               )}
+              {/* Rescrape Inventory Button */}
+              {profileId && (
+                <button
+                  onClick={handleRescrapeInventory}
+                  className="primary-btn btn-blue"
+                  disabled={rescraping}
+                  title="Rescrape your Steam inventory to update items"
+                >
+                  {rescraping ? (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  ) : (
+                    <RefreshIcon fontSize="inherit" />
+                  )}
+                  {rescraping ? "Rescraping..." : "Rescrape Inventory"}
+                </button>
+              )}
+
               {/* Delete Inventory */}
               {items.length > 0 && (
                 <button
@@ -774,7 +804,7 @@ export const SteamInventory: React.FC = () => {
         </div>
 
         {/* Filter Section */}
-        <div className="border-b border-primary/20 bg-secondary/30">
+        <div className="">
           <div className="p-4">
             {/* Filter Controls */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
@@ -925,9 +955,10 @@ export const SteamInventory: React.FC = () => {
                 return (
                   <div
                     key={itemId}
-                    className="bg-tertiary shadow-lg inset-shadow-md rounded-lg border-2 border-[var(--border-secondary)] overflow-hidden transition-colors flex flex-col h-full"
+                    className="bg-tertiary shadow-lg inset-shadow-md rounded-lg border overflow-hidden transition-colors flex flex-col h-full"
                     style={{
                       background: `linear-gradient(to bottom, ${rarityColor}40 0%, transparent 60%), var(--bg-secondary)`,
+                      borderColor: `${rarityColor}75`,
                     }}
                   >
                     {/* Item Image with Gradient Background */}
@@ -955,32 +986,30 @@ export const SteamInventory: React.FC = () => {
 
                     {/* Item Details and Actions - flex-grow to push actions to bottom */}
                     <div className="flex flex-col flex-grow p-4">
-                      {/* Float Value - Show for items that can have float */}
-                      {item.float_value && item.float_value > 0 ? (
-                        <div className="text-xs text-muted mb-2">
-                          Float: {item.float_value.toFixed(6)}
-                        </div>
-                      ) : null}
-
-                      {/* Paint Seed - Show for items that have pattern */}
-                      {item.paint_seed && item.paint_seed > 0 ? (
-                        <div className="text-xs text-muted mb-2">
-                          Pattern: {item.paint_seed}
-                        </div>
-                      ) : null}
+                      <div className="flex items-center w-full my-1">
+                        <span className="flex-grow border-t border-muted/30" />
+                        <span className="px-2 text-[8px] text-muted/30 font-medium whitespace-nowrap">
+                          Prices
+                        </span>
+                        <span className="flex-grow border-t border-muted/30" />
+                      </div>
 
                       {/* Prices */}
                       <div className="space-y-2 mb-3">
                         <div className="flex justify-between items-end text-xs">
-                          <span className="text-muted">Current:</span>
-                          <span className="text-gold font-medium text-xl">
+                          <span className="text-muted font-medium">
+                            Current:
+                          </span>
+                          <span className="font-medium">
                             €{item.current_price?.toFixed(2) || "0.00"}
                           </span>
                         </div>
 
                         {/* Bought Price - Editable */}
                         <div className="flex justify-between text-xs">
-                          <span className="text-muted">Bought:</span>
+                          <span className="text-muted font-medium">
+                            Bought:
+                          </span>
                           {editingItem === itemId ? (
                             <div className="flex items-center justify-center">
                               <input
@@ -1010,7 +1039,9 @@ export const SteamInventory: React.FC = () => {
 
                         {/* Overpay - Editable */}
                         <div className="flex justify-between text-xs">
-                          <span className="text-muted">Overpay:</span>
+                          <span className="text-muted font-medium">
+                            Overpay:
+                          </span>
                           {editingOverpayItem === itemId ? (
                             <div className="flex items-center justify-center">
                               <input
@@ -1048,7 +1079,9 @@ export const SteamInventory: React.FC = () => {
 
                           return (
                             <div className="flex justify-between text-xs">
-                              <span className="text-muted">P/L:</span>
+                              <span className="text-muted font-medium">
+                                P/L:
+                              </span>
                               <span
                                 className={
                                   profitLoss >= 0
@@ -1063,19 +1096,51 @@ export const SteamInventory: React.FC = () => {
                           );
                         })()}
 
+                        <div className="flex items-center w-full my-1">
+                          <span className="flex-grow border-t border-muted/30" />
+                          <span className="px-2 text-[8px] text-muted/30 font-medium whitespace-nowrap">
+                            Item Infos
+                          </span>
+                          <span className="flex-grow border-t border-muted/30" />
+                        </div>
                         <div className="flex justify-between items-end text-xs">
-                          <span className="text-muted">Rarity:</span>
-                          <span className="" style={{ color: rarityColor }}>
+                          <span className="text-muted font-medium">
+                            Rarity:
+                          </span>
+                          <span
+                            className="font-medium"
+                            style={{ color: rarityColor }}
+                          >
                             {item.rarity}
                           </span>
                         </div>
 
-                        {item.condition && item.condition !== "N/A" && (
-                          <div className="flex justify-between items-end text-xs">
-                            <span className="text-muted">Condition:</span>
-                            <span>{item.condition}</span>
+                        <div className="flex justify-between items-end text-xs">
+                          <span className="text-muted font-medium">
+                            Condition:
+                          </span>
+                          <span className="font-medium">
+                            {item.condition && item.condition !== "N/A" ? (
+                              <>{item.condition}</>
+                            ) : (
+                              <>-</>
+                            )}
+                          </span>
+                        </div>
+
+                        {/* Float Value - Show for items that can have float */}
+                        {item.float_value && item.float_value > 0 ? (
+                          <div className="text-xs text-muted mb-2">
+                            Float: {item.float_value.toFixed(6)}
                           </div>
-                        )}
+                        ) : null}
+
+                        {/* Paint Seed - Show for items that have pattern */}
+                        {item.paint_seed && item.paint_seed > 0 ? (
+                          <div className="text-xs text-muted mb-2">
+                            Pattern: {item.paint_seed}
+                          </div>
+                        ) : null}
                       </div>
 
                       {/* Spacer to push actions to bottom */}

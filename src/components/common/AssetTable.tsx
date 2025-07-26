@@ -29,6 +29,13 @@ const AssetTable: React.FC<AssetTableProps> = ({
   const [sortField, setSortField] = useState<keyof Asset>("name");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [filterText, setFilterText] = useState("");
+  // Advanced filters for cards
+  const [expansionFilter, setExpansionFilter] = useState("");
+  const [rarityFilter, setRarityFilter] = useState("");
+  const [minPrice, setMinPrice] = useState("");
+  const [maxPrice, setMaxPrice] = useState("");
+  const [sortBy, setSortBy] = useState<string>("name");
+  const [sortOrder, setSortOrder] = useState<string>("asc");
   const [isRescraping, setIsRescraping] = useState(false);
   const [rescrapeMessage, setRescrapeMessage] = useState<string>("");
   const [rescrapeError, setRescrapeError] = useState<string>("");
@@ -288,38 +295,87 @@ const AssetTable: React.FC<AssetTableProps> = ({
     }
   };
 
-  const filteredAssets = assets.filter(
-    (asset) =>
-      asset.name.toLowerCase().includes(filterText.toLowerCase()) ||
-      (asset.type === "cards" &&
-        "tcg" in asset &&
-        asset.tcg.toLowerCase().includes(filterText.toLowerCase())) ||
-      (asset.type === "cards" &&
-        "expansion" in asset &&
-        asset.expansion.toLowerCase().includes(filterText.toLowerCase())) ||
-      (asset.type === "stocks" &&
-        "symbol" in asset &&
-        asset.symbol.toLowerCase().includes(filterText.toLowerCase())) ||
-      (asset.type === "etfs" &&
-        "symbol" in asset &&
-        asset.symbol.toLowerCase().includes(filterText.toLowerCase()))
-  );
+  const filteredAssets = assets.filter((asset) => {
+    // Name filter
+    if (
+      filterText &&
+      !asset.name.toLowerCase().includes(filterText.toLowerCase())
+    ) {
+      return false;
+    }
+    // Expansion filter (for cards)
+    if (
+      expansionFilter &&
+      asset.type === "cards" &&
+      "expansion" in asset &&
+      asset.expansion
+    ) {
+      if (
+        !asset.expansion.toLowerCase().includes(expansionFilter.toLowerCase())
+      ) {
+        return false;
+      }
+    }
+    // Rarity filter (for cards)
+    if (
+      rarityFilter &&
+      asset.type === "cards" &&
+      "rarity" in asset &&
+      asset.rarity
+    ) {
+      if (asset.rarity !== rarityFilter) {
+        return false;
+      }
+    }
+    // Price filter
+    const currentPrice = asset.current_price || 0;
+    if (minPrice && currentPrice < parseFloat(minPrice)) {
+      return false;
+    }
+    if (maxPrice && currentPrice > parseFloat(maxPrice)) {
+      return false;
+    }
+    return true;
+  });
 
   const sortedAssets = [...filteredAssets].sort((a, b) => {
-    const aValue = a[sortField];
-    const bValue = b[sortField];
-
-    if (typeof aValue === "string" && typeof bValue === "string") {
-      return sortDirection === "asc"
-        ? aValue.localeCompare(bValue)
-        : bValue.localeCompare(aValue);
+    let compareValue = 0;
+    switch (sortBy) {
+      case "name":
+        compareValue = a.name.localeCompare(b.name);
+        break;
+      case "expansion":
+        if (
+          a.type === "cards" &&
+          b.type === "cards" &&
+          "expansion" in a &&
+          "expansion" in b
+        ) {
+          compareValue = (a.expansion || "").localeCompare(b.expansion || "");
+        }
+        break;
+      case "rarity":
+        if (
+          a.type === "cards" &&
+          b.type === "cards" &&
+          "rarity" in a &&
+          "rarity" in b
+        ) {
+          compareValue = (a.rarity || "").localeCompare(b.rarity || "");
+        }
+        break;
+      case "price":
+        compareValue = (a.current_price || 0) - (b.current_price || 0);
+        break;
+      case "profit":
+        const aProfit = (a.current_price || 0) - (a.price_bought || 0);
+        const bProfit = (b.current_price || 0) - (b.price_bought || 0);
+        compareValue = aProfit - bProfit;
+        break;
+      default:
+        compareValue = 0;
     }
-
-    if (typeof aValue === "number" && typeof bValue === "number") {
-      return sortDirection === "asc" ? aValue - bValue : bValue - aValue;
-    }
-
-    return 0;
+    return sortOrder === "desc" ? -compareValue : compareValue;
   });
 
   const getSortIcon = (field: keyof Asset) => {
@@ -341,37 +397,10 @@ const AssetTable: React.FC<AssetTableProps> = ({
               {assetType.charAt(0).toUpperCase() + assetType.slice(1)} Summary
             </h3>
             <div className="flex space-x-3">
-              {/* Add New button for each asset type */}
-              {assetType === "cards" && (
-                <button
-                  onClick={handleAddNewCard}
-                  className="primary-btn btn-green disabled:bg-gray-600 disabled:cursor-not-allowed"
-                >
-                  <AddIcon fontSize="inherit" />
-                  Add New Card
-                </button>
-              )}
-              {/* Rescrape/refresh and delete all remain for all types */}
-              {assetType === "cards" && (
-                <button
-                  onClick={handleRescrape}
-                  disabled={isRescraping || assets.length === 0}
-                  className="primary-btn disabled:bg-gray-600 disabled:cursor-not-allowed"
-                >
-                  {isRescraping ? (
-                    "Updating..."
-                  ) : (
-                    <>
-                      <RefreshIcon fontSize="inherit" />
-                      {"Update Prices"}
-                    </>
-                  )}
-                </button>
-              )}
               <button
                 onClick={handleDeleteAll}
                 disabled={isDeleting || assets.length === 0}
-                className="primary-btn btn-red disabled:bg-gray-600 disabled:cursor-not-allowed"
+                className="primary-btn btn-red"
               >
                 {isDeleting ? (
                   "Deleting..."
@@ -467,16 +496,112 @@ const AssetTable: React.FC<AssetTableProps> = ({
               {assetType.charAt(0).toUpperCase() + assetType.slice(1)} (
               {assets.length})
             </h3>
-            <input
-              type="text"
-              placeholder={`Filter ${assetType}...`}
-              value={filterText}
-              onChange={(e) => setFilterText(e.target.value)}
-              className="input"
-            />
+            <div className="flex items-center space-x-3">
+              {/* Add New button for each asset type */}
+              {assetType === "cards" && (
+                <button
+                  onClick={handleAddNewCard}
+                  className="primary-btn btn-green"
+                >
+                  <AddIcon fontSize="inherit" />
+                  Add New Card
+                </button>
+              )}
+              {/* Rescrape/refresh and delete all remain for all types */}
+              {assetType === "cards" && (
+                <button
+                  onClick={handleRescrape}
+                  disabled={isRescraping || assets.length === 0}
+                  className="primary-btn btn-black"
+                >
+                  {isRescraping ? (
+                    "Updating..."
+                  ) : (
+                    <>
+                      <RefreshIcon fontSize="inherit" />
+                      {"Update Prices"}
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
           </div>
         </div>
-
+        {assetType === "cards" ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 p-4 mb-4">
+            {/* Name Filter */}
+            <div>
+              <label className="block text-xs font-medium text-muted mb-1">
+                Card Name
+              </label>
+              <input
+                type="text"
+                value={filterText}
+                onChange={(e) => setFilterText(e.target.value)}
+                placeholder="Filter by name..."
+                className="input w-full"
+              />
+            </div>
+            {/* Expansion Filter */}
+            <div>
+              <label className="block text-xs font-medium text-muted mb-1">
+                Expansion
+              </label>
+              <input
+                type="text"
+                value={expansionFilter}
+                onChange={(e) => setExpansionFilter(e.target.value)}
+                placeholder="Filter by expansion..."
+                className="input w-full"
+              />
+            </div>
+            {/* Sort By & Order */}
+            <div>
+              <label className="block text-xs font-medium text-muted mb-1">
+                Sort By
+              </label>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                className="select w-full"
+              >
+                <option value="name">Name</option>
+                <option value="expansion">Expansion</option>
+                <option value="rarity">Rarity</option>
+                <option value="price">Current Price</option>
+                <option value="profit">Profit</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-muted mb-1">
+                Sort Order
+              </label>
+              <select
+                value={sortOrder}
+                onChange={(e) => setSortOrder(e.target.value)}
+                className="select w-full"
+              >
+                <option value="asc">Ascending</option>
+                <option value="desc">Descending</option>
+              </select>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 p-4 mb-4">
+            <div>
+              <label className="block text-xs font-medium text-muted mb-1">
+                Asset Name
+              </label>
+              <input
+                type="text"
+                placeholder={`Filter ${assetType}...`}
+                value={filterText}
+                onChange={(e) => setFilterText(e.target.value)}
+                className="input w-full"
+              />
+            </div>
+          </div>
+        )}
         <div className="card-body">
           {sortedAssets.length === 0 ? (
             <div className="px-6 py-8 text-center text-secondary">

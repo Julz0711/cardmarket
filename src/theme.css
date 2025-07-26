@@ -84,26 +84,26 @@
   }
   .primary-btn {
     @apply px-3 py-2 rounded-md text-xs font-bold transition-all duration-150 ease-in-out cursor-pointer flex flex-row items-center justify-center gap-1;
-    @apply text-white bg-blue hover:bg-blue/70 active:scale-95 hover:scale-95;
+    @apply text-white bg-blue hover:bg-blue/70 active:scale-95 disabled:text-muted disabled:bg-secondary/70 disabled:cursor-not-allowed disabled:ring-0 disabled:border-0;
   }
   .primary-btn.btn-green {
-    @apply bg-green hover:bg-green/70;
+    @apply bg-green hover:bg-green/70 border-ring-primary disabled:text-muted disabled:bg-secondary/70 disabled:border-secondary/70 disabled:cursor-not-allowed disabled:ring-0 disabled:border-0;
   }
   .primary-btn.btn-red {
-    @apply bg-red hover:bg-red/70;
+    @apply bg-red hover:bg-red/70 disabled:text-muted disabled:bg-secondary/70 disabled:border-secondary/70 disabled:cursor-not-allowed disabled:ring-0 disabled:border-0;
   }
   .primary-btn.btn-gray {
     @apply bg-secondary hover:bg-secondary/70;
   }
   .primary-btn.btn-black {
-    @apply bg-primary border-1 border-ring-primary hover:bg-tertiary hover:border-white;
+    @apply bg-primary border-1 text-white border-ring-primary hover:bg-secondary hover:border-white disabled:text-muted disabled:bg-secondary/70 disabled:border-secondary/70 disabled:cursor-not-allowed;
   }
   .btn-xl {
     @apply px-6 py-3 text-lg font-bold rounded-lg border-none transition-all duration-200 ease-in-out bg-blue text-white hover:bg-blue/70 disabled:bg-primary cursor-pointer;
   }
   .nav-primary {
     @apply cursor-pointer inline-flex items-center px-4 py-2 rounded-md font-medium transition-all duration-200 ease-in-out;
-    @apply bg-tertiary text-white hover:bg-hover-bg hover:scale-95;
+    @apply bg-tertiary text-white hover:bg-hover-bg;
   }
   .nav-primary.active {
     @apply text-primary bg-white;

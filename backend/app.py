@@ -1,3 +1,4 @@
+
 from flask import Flask, jsonify, request, Response
 from flask_cors import CORS
 from datetime import datetime
@@ -1395,15 +1396,6 @@ def get_steam_stats():
         logger.error(f"Error getting Steam stats: {e}")
         return jsonify({'status': 'error', 'message': 'Failed to get Steam stats'}), 500
         
-        response_message = f"{' and '.join(message_parts)} from Steam inventory"
-        
-        return jsonify({
-            'message': response_message,
-            'scraped_items': scraped_items,
-            'skipped_items': skipped_items,
-            'total_items': len(card_model.get_cards(user_id=user_id))
-        })
-        
     except ValidationError as e:
         logger.warning(f"Validation error in Steam scraping: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 400
@@ -1413,6 +1405,84 @@ def get_steam_stats():
     except Exception as e:
         logger.error(f"Unexpected error in Steam scraping: {e}")
         return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
+
+# STEAM INVENTORY RESCRAPE ENDPOINT
+@app.route('/api/steam/rescrape', methods=['POST'])
+@auth_required
+def rescrape_steam_inventory():
+    """Rescrape Steam inventory: add new items, remove sold items, skip existing."""
+    try:
+        data = request.get_json()
+        steam_id = data.get('steam_id')
+        if not steam_id:
+            return jsonify({'status': 'error', 'message': 'Missing steam_id'}), 400
+
+        user_id = request.current_user['user_id']
+
+        # Scrape current inventory (returns list of dicts)
+        scraped_items_data = scraper_manager.scrape_assets(
+            'steam',
+            steam_id=steam_id,
+            user_id=user_id,
+            headless=True
+        )
+
+        # Get current items from DB
+        db_items = steam_item_model.get_items_by_user(user_id)
+        db_ids = {str(item.get('asset_id')) for item in db_items}
+        scraped_ids = {str(item.get('asset_id')) for item in scraped_items_data}
+
+        # Add new items
+        added = 0
+        for item in scraped_items_data:
+            if str(item.get('asset_id')) not in db_ids:
+                try:
+                    # Prepare item data for DB
+                    item_data = {
+                        'user_id': user_id,
+                        'name': item.get('name', ''),
+                        'rarity': item.get('rarity', 'Unknown'),
+                        'condition': item.get('condition'),
+                        'float_value': item.get('float_value'),
+                        'current_price': 0.0,
+                        'price_bought': 0.0,
+                        'quantity': item.get('quantity', 1),
+                        'game': item.get('game', 'Counter-Strike 2'),
+                        'asset_id': item.get('asset_id'),
+                        'image_url': item.get('image_url', ''),
+                        'market_hash_name': item.get('market_hash_name', ''),
+                        'item_category': item.get('item_category', 'unknown'),
+                        'item_type': item.get('item_type', ''),
+                        'steam_id': steam_id
+                    }
+                    steam_item_model.create_item(item_data)
+                    added += 1
+                except Exception as e:
+                    logger.error(f"Failed to add Steam item: {item.get('name', '')}: {e}")
+
+        # Remove sold items
+        removed = 0
+        for item in db_items:
+            if str(item.get('asset_id')) not in scraped_ids:
+                try:
+                    steam_item_model.delete_item(item['_id'], user_id)
+                    removed += 1
+                except Exception as e:
+                    logger.error(f"Failed to remove Steam item: {item.get('name', '')}: {e}")
+
+        skipped = len(scraped_items_data) - added
+
+        return jsonify({
+            'status': 'success',
+            'message': f'Rescrape complete. Added: {added}, Removed: {removed}, Skipped: {skipped}',
+            'items': scraped_items_data,
+            'added': added,
+            'removed': removed,
+            'skipped': skipped
+        })
+    except Exception as e:
+        logger.error(f"Error during Steam inventory rescrape: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 # Authentication Routes
 @app.route('/api/auth/register', methods=['POST'])

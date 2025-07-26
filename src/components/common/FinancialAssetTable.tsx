@@ -1,4 +1,4 @@
-import React, { useState, useEffect, memo } from "react";
+import React, { useState, memo } from "react";
 import type { Asset } from "../../types/assets";
 import { apiClient } from "../../api/client";
 
@@ -523,46 +523,24 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
   return (
     <div className="space-y-6">
       {/* Total Summary Section */}
-      {/* ...existing code... */}
       <div className="card">
         <div className="card-header">
           <div className="flex justify-between items-center">
             <h3 className="text-lg font-semibold text-primary">
               {getAssetTypeLabel()} Summary
             </h3>
-            <div className="flex space-x-3">
-              <button
-                onClick={handleAddNew}
-                className="primary-btn btn-green disabled:bg-gray-600 disabled:cursor-not-allowed"
-              >
-                <AddIcon fontSize="inherit" />
-                Add New {getAssetTypeLabel().slice(0, -1)}
-              </button>
-              <button
-                onClick={handleUpdatePrices}
-                disabled={isUpdatingPrices || assets.length === 0}
-                className="primary-btn btn-blue disabled:bg-gray-600 disabled:cursor-not-allowed"
-              >
-                {isUpdatingPrices ? (
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                ) : (
-                  <RefreshIcon fontSize="inherit" />
-                )}
-                {isUpdatingPrices ? "Updating..." : "Update Prices"}
-              </button>
-              <button
-                onClick={handleDeleteAll}
-                disabled={isDeleting || assets.length === 0}
-                className="primary-btn btn-red disabled:bg-gray-600 disabled:cursor-not-allowed"
-              >
-                {isDeleting ? (
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                ) : (
-                  <DeleteIcon fontSize="inherit" />
-                )}
-                Delete All
-              </button>
-            </div>
+            <button
+              onClick={handleDeleteAll}
+              disabled={isDeleting || assets.length === 0}
+              className="primary-btn btn-red disabled:bg-gray-600 disabled:cursor-not-allowed"
+            >
+              {isDeleting ? (
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+              ) : (
+                <DeleteIcon fontSize="inherit" />
+              )}
+              Delete All
+            </button>
           </div>
         </div>
 
@@ -645,27 +623,59 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
             <h3 className="text-lg font-medium text-primary">
               {getAssetTypeLabel()} ({assets.length})
             </h3>
-            <div className="flex flex-col md:flex-row gap-2 md:gap-4 items-center">
-              <input
-                type="text"
-                placeholder={`Filter ${assetType}...`}
-                value={filterText}
-                onChange={(e) => setFilterText(e.target.value)}
-                className="input"
-              />
-              {/* Sorting filter dropdown */}
-              <select
-                value={sortFilter}
-                onChange={(e) => setSortFilter(e.target.value)}
-                className="select"
-                aria-label="Sort assets"
+            <div className="flex space-x-3">
+              <button
+                onClick={handleAddNew}
+                className="primary-btn btn-green disabled:bg-gray-600 disabled:cursor-not-allowed"
               >
-                <option value="name">Name</option>
-                <option value="value">Value</option>
-                <option value="profit">Profit</option>
-                <option value="loss">Loss</option>
-              </select>
+                <AddIcon fontSize="inherit" />
+                Add New {getAssetTypeLabel().slice(0, -1)}
+              </button>
+              <button
+                onClick={handleUpdatePrices}
+                disabled={isUpdatingPrices || assets.length === 0}
+                className="primary-btn btn-black disabled:bg-gray-600 disabled:cursor-not-allowed"
+              >
+                {isUpdatingPrices ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                ) : (
+                  <RefreshIcon fontSize="inherit" />
+                )}
+                {isUpdatingPrices ? "Updating..." : "Update Prices"}
+              </button>
             </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4 p-4">
+          <div>
+            <label className="block text-xs font-medium text-muted mb-1">
+              Asset Name
+            </label>
+            <input
+              type="text"
+              placeholder={`Filter ${assetType}...`}
+              value={filterText}
+              onChange={(e) => setFilterText(e.target.value)}
+              className="input w-full"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-muted mb-1">
+              Sort By
+            </label>
+            <select
+              value={sortFilter}
+              onChange={(e) => setSortFilter(e.target.value)}
+              className="select w-full"
+              aria-label="Sort assets"
+            >
+              <option value="name">Name</option>
+              <option value="value">Value</option>
+              <option value="profit">Profit</option>
+              <option value="loss">Loss</option>
+            </select>
           </div>
         </div>
 
@@ -844,12 +854,12 @@ const FinancialAssetTable: React.FC<FinancialAssetTableProps> = ({
                 {/* Add Transaction Section */}
                 <div className="bg-primary p-4 rounded-md border border-primary">
                   {/* Buy/Sell Tabs */}
-                  <div className="flex space-x-2 bg-tertiary p-1 rounded-lg mb-2">
+                  <div className="flex space-x-2 bg-tertiary p-[2px] rounded-lg mb-2">
                     {(["buy", "sell"] as TransactionType[]).map((type) => (
                       <button
                         key={type}
                         type="button"
-                        className={`px-4 py-1 w-full rounded-md font-semibold text-sm focus:outline-none transition-colors cursor-pointer hover:bg-primary/50 ${
+                        className={`px-4 py-1 text-[10px] w-full rounded-md font-medium focus:outline-none transition-colors cursor-pointer hover:bg-primary/50 ${
                           editFormData.type === type
                             ? "bg-primary text-white"
                             : "text-muted hover:text-white"

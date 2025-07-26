@@ -129,7 +129,7 @@ class SteamInventoryScraper(BaseScraper):
             self.log_scraping_start(**kwargs)
             steam_id = kwargs['steam_id']
             app_id = kwargs.get('app_id', '730')  # Default to CS2
-            include_floats = kwargs.get('include_floats', True)
+            include_floats = kwargs.get('include_floats', False)
             include_prices = kwargs.get('include_prices', False)  # Include prices is optional
             user_id = kwargs.get('user_id')  # Extract user_id parameter
             items = []
